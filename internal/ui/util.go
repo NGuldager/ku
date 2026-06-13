@@ -1,41 +1,33 @@
 package ui
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+)
 
 func itoa(n int) string { return strconv.Itoa(n) }
 
-// truncate shortens s to at most w runes, adding an ellipsis when cut.
+// truncate shortens s to at most w display columns, adding an ellipsis when
+// cut. It is display-width and ANSI aware (the same engine used everywhere else
+// in the package).
 func truncate(s string, w int) string {
 	if w <= 0 {
 		return ""
 	}
-	r := []rune(s)
-	if len(r) <= w {
-		return s
-	}
-	if w == 1 {
-		return "…"
-	}
-	return string(r[:w-1]) + "…"
+	return ansi.Truncate(s, w, "…")
 }
 
-func padRight(s string, n int) string {
-	r := []rune(s)
-	if len(r) >= n {
-		return s
+// spread lays out left and right text on one line of the given width, padding
+// the gap between them (minimum one space).
+func spread(left, right string, width int) string {
+	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
+	if gap < 1 {
+		gap = 1
 	}
-	return s + spaces(n-len(r))
-}
-
-func spaces(n int) string {
-	if n <= 0 {
-		return ""
-	}
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = ' '
-	}
-	return string(b)
+	return left + strings.Repeat(" ", gap) + right
 }
 
 func clamp(v, lo, hi int) int {

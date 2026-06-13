@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -46,17 +47,33 @@ type ClusterOverview struct {
 	Warnings []EventLine
 }
 
-// ClusterStats gathers a cluster overview. Each section is best-effort: a
-// failure in one (e.g. no metrics) leaves its fields zero rather than failing
-// the whole snapshot.
+// ClusterStats gathers a cluster overview. The sections are independent reads
+// run concurrently; each is best-effort, so a failure in one (e.g. no metrics)
+// leaves its fields zero rather than failing the whole snapshot. Each section
+// writes a disjoint set of fields, so no locking is needed.
 func (c *Client) ClusterStats(ctx context.Context) (*ClusterOverview, error) {
 	o := &ClusterOverview{}
 
-	if v, err := c.disco.ServerVersion(); err == nil {
-		o.Version = v.GitVersion
+	var wg sync.WaitGroup
+	run := func(f func()) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f()
+		}()
 	}
 
-	if nodes, err := c.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{}); err == nil {
+	run(func() {
+		if v, err := c.disco.ServerVersion(); err == nil {
+			o.Version = v.GitVersion
+		}
+	})
+
+	run(func() {
+		nodes, err := c.clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return
+		}
 		o.Nodes = len(nodes.Items)
 		for i := range nodes.Items {
 			n := &nodes.Items[i]
@@ -70,21 +87,29 @@ func (c *Client) ClusterStats(ctx context.Context) (*ClusterOverview, error) {
 				o.MemAllocBytes += q.Value()
 			}
 		}
-	}
+	})
 
-	if usage, err := c.nodeUsage(ctx); err == nil && len(usage) > 0 {
-		o.HasMetrics = true
-		for _, u := range usage {
-			o.CPUUsedMilli += u.cpuMilli
-			o.MemUsedBytes += u.memBytes
+	run(func() {
+		if usage, err := c.nodeUsage(ctx); err == nil && len(usage) > 0 {
+			o.HasMetrics = true
+			for _, u := range usage {
+				o.CPUUsedMilli += u.cpuMilli
+				o.MemUsedBytes += u.memBytes
+			}
 		}
-	}
+	})
 
-	if nss, err := c.clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{}); err == nil {
-		o.Namespaces = len(nss.Items)
-	}
+	run(func() {
+		if nss, err := c.clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{}); err == nil {
+			o.Namespaces = len(nss.Items)
+		}
+	})
 
-	if pods, err := c.clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{}); err == nil {
+	run(func() {
+		pods, err := c.clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return
+		}
 		o.Pods = len(pods.Items)
 		for i := range pods.Items {
 			switch pods.Items[i].Status.Phase {
@@ -98,21 +123,26 @@ func (c *Client) ClusterStats(ctx context.Context) (*ClusterOverview, error) {
 				o.PodSucceeded++
 			}
 		}
-	}
+	})
 
-	if deps, err := c.clientset.AppsV1().Deployments("").List(ctx, metav1.ListOptions{}); err == nil {
+	run(func() {
+		deps, err := c.clientset.AppsV1().Deployments("").List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return
+		}
 		o.Deployments = len(deps.Items)
 		for i := range deps.Items {
 			d := &deps.Items[i]
-			if d.Status.Replicas > 0 && d.Status.ReadyReplicas >= d.Status.Replicas {
+			// Ready when fully available, or scaled to zero (healthy).
+			if d.Status.Replicas == 0 || d.Status.ReadyReplicas >= d.Status.Replicas {
 				o.DeploymentsReady++
-			} else if d.Status.Replicas == 0 {
-				o.DeploymentsReady++ // scaled to zero counts as healthy
 			}
 		}
-	}
+	})
 
-	o.Warnings = c.recentWarnings(ctx)
+	run(func() { o.Warnings = c.recentWarnings(ctx) })
+
+	wg.Wait()
 	return o, nil
 }
 

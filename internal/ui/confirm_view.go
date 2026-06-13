@@ -1,13 +1,18 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
 
-// confirmView is a small yes/no modal used for destructive actions.
+// confirmView is a small yes/no modal. action is the command run on confirm,
+// so the overlay stays generic over what it confirms.
 type confirmView struct {
 	th      Theme
 	title   string
 	message string
 	danger  bool
+	action  tea.Cmd
 }
 
 func (c confirmView) View(width, height int) string {

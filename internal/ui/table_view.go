@@ -117,14 +117,6 @@ func (v *tableView) filterValue() string {
 	return v.filter.Value()
 }
 
-// clearFilter drops an applied filter and restores the full list.
-func (v *tableView) clearFilter() {
-	v.filtering = false
-	v.filter.Blur()
-	v.filter.SetValue("")
-	v.rebuild()
-}
-
 func (v *tableView) selected() (k8s.Row, bool) {
 	i := v.tbl.Cursor()
 	if i < 0 || i >= len(v.rows) {

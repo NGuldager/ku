@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -36,16 +37,6 @@ func (r ResourceInfo) Key() string {
 // Title is a short human label for the resource shown in the header.
 func (r ResourceInfo) Title() string {
 	return r.Resource
-}
-
-// Can reports whether the resource supports the given verb (e.g. "delete").
-func (r ResourceInfo) Can(verb string) bool {
-	for _, v := range r.Verbs {
-		if v == verb {
-			return true
-		}
-	}
-	return false
 }
 
 // IsPod reports whether this resource is the core Pod type.
@@ -130,12 +121,7 @@ func (c *Client) loadRegistry() error {
 }
 
 func canList(verbs []string) bool {
-	for _, v := range verbs {
-		if v == "list" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(verbs, "list")
 }
 
 func (reg *Registry) add(ri ResourceInfo) {

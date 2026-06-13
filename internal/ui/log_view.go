@@ -7,7 +7,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/bjarneo/kli/internal/k8s"
 )
@@ -30,6 +29,7 @@ type logView struct {
 	cancel  context.CancelFunc
 	ch      chan logEvent
 	lines   []string
+	content string // joined view content, maintained incrementally
 }
 
 func newLogView(th Theme) logView {
@@ -46,10 +46,16 @@ func (l *logView) setSize(w, h int) {
 
 func (l *logView) appendLine(s string) {
 	l.lines = append(l.lines, s)
-	if len(l.lines) > maxLogLines {
+	switch {
+	case len(l.lines) > maxLogLines:
 		l.lines = l.lines[len(l.lines)-maxLogLines:]
+		l.content = strings.Join(l.lines, "\n") // rebuild only when trimming the front
+	case l.content == "":
+		l.content = s
+	default:
+		l.content += "\n" + s
 	}
-	l.vp.SetContent(strings.Join(l.lines, "\n"))
+	l.vp.SetContent(l.content)
 	if l.follow {
 		l.vp.GotoBottom()
 	}
@@ -77,12 +83,7 @@ func (l logView) View() string {
 	}
 	right := style.Render("● " + state)
 	title := l.th.ModalTitle.Render(l.title)
-	gap := l.vp.Width - lipgloss.Width(title) - lipgloss.Width(right)
-	if gap < 1 {
-		gap = 1
-	}
-	header := title + strings.Repeat(" ", gap) + right
-	return header + "\n" + l.vp.View()
+	return spread(title, right, l.vp.Width) + "\n" + l.vp.View()
 }
 
 // streamLogs opens the log stream and feeds lines onto ch until the context is

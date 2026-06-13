@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -33,7 +34,7 @@ func (h helpView) View(width, height int) string {
 		b.WriteString("\n")
 		for _, k := range g.keys {
 			hk := k.Help()
-			b.WriteString(h.th.FooterKey.Render(padRight(hk.Key, 8)))
+			b.WriteString(h.th.FooterKey.Render(fmt.Sprintf("%-8s", hk.Key)))
 			b.WriteString(" ")
 			b.WriteString(h.th.FooterDesc.Render(hk.Desc))
 			b.WriteString("\n")

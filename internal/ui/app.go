@@ -45,13 +45,6 @@ const (
 	focusSidebar
 )
 
-type confirmKind int
-
-const (
-	confirmDelete confirmKind = iota
-	confirmRestart
-)
-
 const (
 	headerHeight = 1
 	footerHeight = 1
@@ -96,12 +89,10 @@ type App struct {
 	termSession int
 
 	// pending action context
-	confirmTarget target
-	confirmKind   confirmKind
-	scaleTarget   target
-	detailTarget  target
-	logTarget     target
-	execTarget    target
+	scaleTarget  target
+	detailTarget target
+	logTarget    target
+	execTarget   target
 
 	logSession int
 
@@ -458,7 +449,7 @@ func (a App) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.Back):
 		// esc clears an applied filter; otherwise it is a no-op on the table.
 		if a.table.filterActive() {
-			a.table.clearFilter()
+			a.table.stopFilter(true)
 			a.setStatus("filter cleared", false)
 		}
 		return a, nil
@@ -658,14 +649,9 @@ func (a App) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y", "enter":
 		a.overlay = overlayNone
-		t := a.confirmTarget
-		if a.confirmKind == confirmRestart {
-			return a, restartCmd(a.client, t.res, t.ns, t.name)
-		}
-		return a, deleteCmd(a.client, t.res, t.ns, t.name)
+		return a, a.confirm.action
 	case "n", "N", "esc":
 		a.overlay = overlayNone
-		return a, nil
 	}
 	return a, nil
 }
@@ -826,7 +812,6 @@ func (a App) startExec(ns, pod, container string) (tea.Model, tea.Cmd) {
 	t.session = sess
 	t.cols, t.rows = cols, rows
 	t.title = pod + " › " + container
-	t.started = true
 	a.term = t
 	a.overlay = overlayTerm
 
@@ -893,7 +878,6 @@ func (a App) startEdit(m editReadyMsg) (tea.Model, tea.Cmd) {
 	t.session = sess
 	t.cols, t.rows = cols, rows
 	t.title = "edit " + m.name
-	t.started = true
 	t.isEdit = true
 	t.editPath, t.editOriginal = m.path, m.original
 	t.editRes, t.editNs, t.editName = m.res, m.ns, m.name
@@ -973,21 +957,9 @@ func (a App) openDelete() (tea.Model, tea.Cmd) {
 	if !ok {
 		return a, nil
 	}
-	ns := row.Namespace
-	loc := ns + "/" + row.Name
-	if ns == "" {
-		loc = row.Name
-	}
-	a.confirmTarget = target{res: a.res, ns: ns, name: row.Name}
-	a.confirmKind = confirmDelete
-	a.confirm = confirmView{
-		th:      a.theme,
-		title:   "Delete " + a.res.Kind,
-		message: "Delete " + loc + " ?",
-		danger:  true,
-	}
-	a.overlay = overlayConfirm
-	return a, nil
+	loc := qualified(row.Namespace, row.Name)
+	return a.confirmAction("Delete "+a.res.Kind, "Delete "+loc+" ?", true,
+		deleteCmd(a.client, a.res, row.Namespace, row.Name))
 }
 
 func (a App) openRestart() (tea.Model, tea.Cmd) {
@@ -999,19 +971,14 @@ func (a App) openRestart() (tea.Model, tea.Cmd) {
 	if !ok {
 		return a, nil
 	}
-	ns := row.Namespace
-	loc := ns + "/" + row.Name
-	if ns == "" {
-		loc = row.Name
-	}
-	a.confirmTarget = target{res: a.res, ns: ns, name: row.Name}
-	a.confirmKind = confirmRestart
-	a.confirm = confirmView{
-		th:      a.theme,
-		title:   "Restart " + a.res.Kind,
-		message: "Rollout restart " + loc + " ?",
-		danger:  false,
-	}
+	loc := qualified(row.Namespace, row.Name)
+	return a.confirmAction("Restart "+a.res.Kind, "Rollout restart "+loc+" ?", false,
+		restartCmd(a.client, a.res, row.Namespace, row.Name))
+}
+
+// confirmAction opens the confirm overlay for a command to run on yes.
+func (a App) confirmAction(title, message string, danger bool, action tea.Cmd) (tea.Model, tea.Cmd) {
+	a.confirm = confirmView{th: a.theme, title: title, message: message, danger: danger, action: action}
 	a.overlay = overlayConfirm
 	return a, nil
 }
@@ -1190,49 +1157,51 @@ func (a App) applySelection(res selResult) (tea.Model, tea.Cmd) {
 }
 
 func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
-	switch {
-	case strings.HasPrefix(id, "res:"):
-		if ri, ok := a.client.Registry().Resolve(strings.TrimPrefix(id, "res:")); ok {
+	if res, ok := strings.CutPrefix(id, "res:"); ok {
+		if ri, ok := a.client.Registry().Resolve(res); ok {
 			return a.switchResource(ri)
 		}
-	case id == "act:describe", id == "act:yaml":
+		return a, nil
+	}
+	switch id {
+	case "act:describe", "act:yaml":
 		return a.openDetail()
-	case id == "act:edit":
+	case "act:edit":
 		return a.openEdit()
-	case id == "act:delete":
+	case "act:delete":
 		return a.openDelete()
-	case id == "act:logs":
+	case "act:logs":
 		return a.openLogs()
-	case id == "act:shell":
+	case "act:shell":
 		return a.openShell()
-	case id == "act:scale":
+	case "act:scale":
 		return a.openScale()
-	case id == "act:restart":
+	case "act:restart":
 		return a.openRestart()
-	case id == "cmd:jump":
+	case "cmd:jump":
 		return a.openResourceJump()
-	case id == "cmd:filter":
+	case "cmd:filter":
 		a.focus = focusMain
 		a.table.startFilter()
 		return a, nil
-	case id == "cmd:refresh":
+	case "cmd:refresh":
 		if a.screen == screenCockpit {
 			return a.reloadCockpit()
 		}
 		return a.reload()
-	case id == "cmd:namespace":
+	case "cmd:namespace":
 		return a.openNamespacePicker()
-	case id == "cmd:allns":
+	case "cmd:allns":
 		return a.toggleAllNS()
-	case id == "cmd:context":
+	case "cmd:context":
 		return a.openContextPicker()
-	case id == "cmd:wide":
+	case "cmd:wide":
 		a.table.toggleWide()
 		return a, nil
-	case id == "cmd:help":
+	case "cmd:help":
 		a.overlay = overlayHelp
 		return a, nil
-	case id == "cmd:quit":
+	case "cmd:quit":
 		a.logs.stop()
 		return a, tea.Quit
 	}
@@ -1284,23 +1253,25 @@ func (a App) activeNavKey() string {
 	return a.res.Key()
 }
 
-// paneScreen renders the [sidebar | main] two-pane layout with focus-aware
-// borders. main is already-rendered content for the main pane.
-func (a App) paneScreen(main string) string {
-	bh := a.bodyH()
-	sw := a.sidebarWidth()
-	mainW := a.width - sw
+// renderSidebar renders the left nav pane with a focus-aware border.
+func (a App) renderSidebar() string {
+	style := a.theme.PaneInactive
+	if a.focus == focusSidebar {
+		style = a.theme.PaneActive
+	}
+	return style.Width(a.sidebarWidth() - 2).Height(a.bodyH() - 2).MaxHeight(a.bodyH()).
+		Render(a.sidebar.View(a.activeNavKey(), a.focus == focusSidebar))
+}
 
-	sideStyle := a.theme.PaneInactive
+// paneScreen renders [sidebar | main], wrapping main in a focus-aware border.
+func (a App) paneScreen(main string) string {
 	mainStyle := a.theme.PaneActive
 	if a.focus == focusSidebar {
-		sideStyle = a.theme.PaneActive
 		mainStyle = a.theme.PaneInactive
 	}
-	side := sideStyle.Width(sw - 2).Height(bh - 2).MaxHeight(bh).
-		Render(a.sidebar.View(a.activeNavKey(), a.focus == focusSidebar))
-	box := mainStyle.Width(mainW - 2).Height(bh - 2).MaxHeight(bh).Render(main)
-	return lipgloss.JoinHorizontal(lipgloss.Top, side, box)
+	mainW := a.width - a.sidebarWidth()
+	box := mainStyle.Width(mainW - 2).Height(a.bodyH() - 2).MaxHeight(a.bodyH()).Render(main)
+	return lipgloss.JoinHorizontal(lipgloss.Top, a.renderSidebar(), box)
 }
 
 func (a App) tableScreen() string {
@@ -1316,18 +1287,8 @@ func (a App) cockpitScreen() string {
 	}
 	// The cockpit's own panels already have borders, so render them directly
 	// beside the nav rather than inside another bordered pane.
-	bh := a.bodyH()
-	sw := a.sidebarWidth()
-	mainW := a.width - sw
-
-	sideStyle := a.theme.PaneInactive
-	if a.focus == focusSidebar {
-		sideStyle = a.theme.PaneActive
-	}
-	side := sideStyle.Width(sw - 2).Height(bh - 2).MaxHeight(bh).
-		Render(a.sidebar.View(a.activeNavKey(), a.focus == focusSidebar))
-	main := a.cockpit.View(mainW, bh)
-	return lipgloss.JoinHorizontal(lipgloss.Top, side, main)
+	mainW := a.width - a.sidebarWidth()
+	return lipgloss.JoinHorizontal(lipgloss.Top, a.renderSidebar(), a.cockpit.View(mainW, a.bodyH()))
 }
 
 func (a App) headerView() string {
@@ -1353,10 +1314,11 @@ func (a App) headerView() string {
 
 	right := ""
 	if a.screen != screenCockpit {
-		right = th.Dim.Render(itoa(a.table.count()) + " items")
+		label := itoa(a.table.count()) + " items"
 		if a.res.Namespaced && a.namespace == "" {
-			right = th.Dim.Render(itoa(a.table.count()) + " items · all ns")
+			label += " · all ns"
 		}
+		right = th.Dim.Render(label)
 	}
 
 	avail := a.width - lipgloss.Width(right) - 2
@@ -1419,11 +1381,11 @@ func (a App) footerView() string {
 		if lipgloss.Width(left)+len(hint)+lipgloss.Width(right) <= a.width {
 			left += th.FooterDesc.Render(hint)
 		}
-		return fitFooter(left, right, a.width)
+		return spread(left, right, a.width)
 	}
 
 	avail := a.width - lipgloss.Width(right) - 2
-	return fitFooter(renderHints(th, a.hints(), avail), right, a.width)
+	return spread(renderHints(th, a.hints(), avail), right, a.width)
 }
 
 // creatorHandle is shown in the footer's bottom-right strip.
@@ -1492,14 +1454,6 @@ func renderHints(th Theme, hints []hint, avail int) string {
 	return strings.Join(parts, th.FooterDesc.Render(" · "))
 }
 
-func fitFooter(left, right string, width int) string {
-	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 1 {
-		gap = 1
-	}
-	return left + strings.Repeat(" ", gap) + right
-}
-
 func (a App) nsLabel() string {
 	if !a.res.Namespaced {
 		return "cluster"
@@ -1517,6 +1471,14 @@ func toggleFocus(f focusKind) focusKind {
 		return focusSidebar
 	}
 	return focusMain
+}
+
+// qualified renders "namespace/name", or just name for cluster-scoped objects.
+func qualified(ns, name string) string {
+	if ns == "" {
+		return name
+	}
+	return ns + "/" + name
 }
 
 func resourceDesc(ri k8s.ResourceInfo) string {

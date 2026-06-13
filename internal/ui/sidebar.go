@@ -6,13 +6,17 @@ import (
 	"github.com/bjarneo/kli/internal/k8s"
 )
 
+type navCatItem struct{ label, query string }
+
+type navCatGroup struct {
+	section string
+	items   []navCatItem
+}
+
 // navCatalog is the curated, lazygit-style quick list. Entries that the cluster
 // does not expose are dropped, and empty sections are hidden.
-var navCatalog = []struct {
-	section string
-	items   []struct{ label, query string }
-}{
-	{"Workloads", []struct{ label, query string }{
+var navCatalog = []navCatGroup{
+	{"Workloads", []navCatItem{
 		{"Pods", "pods"},
 		{"Deployments", "deployments"},
 		{"StatefulSets", "statefulsets"},
@@ -21,22 +25,22 @@ var navCatalog = []struct {
 		{"Jobs", "jobs"},
 		{"CronJobs", "cronjobs"},
 	}},
-	{"Network", []struct{ label, query string }{
+	{"Network", []navCatItem{
 		{"Services", "services"},
 		{"Ingresses", "ingresses"},
 		{"Endpoints", "endpoints"},
 	}},
-	{"Config", []struct{ label, query string }{
+	{"Config", []navCatItem{
 		{"ConfigMaps", "configmaps"},
 		{"Secrets", "secrets"},
 		{"ServiceAccounts", "serviceaccounts"},
 	}},
-	{"Storage", []struct{ label, query string }{
+	{"Storage", []navCatItem{
 		{"PVCs", "persistentvolumeclaims"},
 		{"PVs", "persistentvolumes"},
 		{"StorageClasses", "storageclasses"},
 	}},
-	{"Cluster", []struct{ label, query string }{
+	{"Cluster", []navCatItem{
 		{"Nodes", "nodes"},
 		{"Namespaces", "namespaces"},
 		{"Events", "events"},

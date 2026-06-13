@@ -40,7 +40,6 @@ type termView struct {
 	cols    int
 	rows    int
 
-	started  bool
 	finished bool
 	status   string
 
@@ -109,11 +108,7 @@ func (t termView) View(width, bodyH int) string {
 	}
 	hintR := th.Dim.Render(hint)
 	title := th.ModalTitle.Render(truncate("● "+t.title, cols-lipgloss.Width(hintR)-1))
-	gap := cols - lipgloss.Width(title) - lipgloss.Width(hintR)
-	if gap < 1 {
-		gap = 1
-	}
-	titleLine := title + strings.Repeat(" ", gap) + hintR
+	titleLine := spread(title, hintR, cols)
 
 	inner := titleLine + "\n" + t.renderScreen()
 	box := th.PaneActive.Render(inner)
