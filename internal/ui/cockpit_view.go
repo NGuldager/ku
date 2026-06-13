@@ -141,13 +141,7 @@ func (c cockpitView) gauge(label string, p, width int) string {
 	if barW < 4 {
 		barW = 4
 	}
-	filled := barW * p / 100
-	if filled > barW {
-		filled = barW
-	}
-	if filled < 0 {
-		filled = 0
-	}
+	filled := clamp(barW*p/100, 0, barW)
 	style := th.Good
 	switch {
 	case p >= 85:
@@ -183,28 +177,14 @@ func (c cockpitView) panel(title string, lines []string, outerW, outerH int) str
 // --- helpers ---------------------------------------------------------------
 
 func gaugeWidth(width int) int {
-	w := width/3 - 4
-	if w < 12 {
-		w = 12
-	}
-	if w > 40 {
-		w = 40
-	}
-	return w
+	return clamp(width/3-4, 12, 40)
 }
 
 func pct(used, total int64) int {
 	if total <= 0 {
 		return 0
 	}
-	p := int(used * 100 / total)
-	if p < 0 {
-		p = 0
-	}
-	if p > 100 {
-		p = 100
-	}
-	return p
+	return clamp(int(used*100/total), 0, 100)
 }
 
 func cores(milli int64) string { return fmt.Sprintf("%.1f", float64(milli)/1000) }

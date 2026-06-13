@@ -1,6 +1,30 @@
 package ui
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
+
+// fuzzyRank filters items to those whose hay(item) matches q, ordered by score
+// (best first, stable). An empty q keeps every item in its original order.
+func fuzzyRank[T any](items []T, q string, hay func(T) string) []T {
+	type scored struct {
+		item  T
+		score int
+	}
+	var ms []scored
+	for _, it := range items {
+		if s, ok := fuzzyScore(q, hay(it)); ok {
+			ms = append(ms, scored{it, s})
+		}
+	}
+	sort.SliceStable(ms, func(i, j int) bool { return ms[i].score > ms[j].score })
+	out := make([]T, len(ms))
+	for i, m := range ms {
+		out[i] = m.item
+	}
+	return out
+}
 
 // fuzzyScore reports whether pattern matches text as a subsequence, with a
 // score that rewards consecutive runs and word-boundary hits so the most

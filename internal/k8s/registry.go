@@ -17,7 +17,6 @@ type ResourceInfo struct {
 	Singular   string // e.g. "pod"
 	ShortNames []string
 	Namespaced bool
-	Verbs      []string
 }
 
 // GVR returns the GroupVersionResource used by the dynamic client.
@@ -103,7 +102,6 @@ func (c *Client) loadRegistry() error {
 				Singular:   ar.SingularName,
 				ShortNames: ar.ShortNames,
 				Namespaced: ar.Namespaced,
-				Verbs:      ar.Verbs,
 			}
 			reg.add(ri)
 		}

@@ -16,7 +16,6 @@ import (
 type EventLine struct {
 	Age       string
 	Namespace string
-	Type      string
 	Reason    string
 	Object    string
 	Message   string
@@ -41,7 +40,6 @@ type ClusterOverview struct {
 	PodRunning   int
 	PodPending   int
 	PodFailed    int
-	PodSucceeded int
 	PodNotReady  int // Running but a container is not Ready
 	PodCrashLoop int // CrashLoopBackOff / image pull errors
 
@@ -127,8 +125,6 @@ func (c *Client) ClusterStats(ctx context.Context) (*ClusterOverview, error) {
 				o.PodPending++
 			case corev1.PodFailed:
 				o.PodFailed++
-			case corev1.PodSucceeded:
-				o.PodSucceeded++
 			}
 			// A crashlooping or image-pull-failing pod still reports Running, so
 			// look at container statuses to find what is actually broken.
@@ -236,7 +232,6 @@ func (c *Client) recentWarnings(ctx context.Context) []EventLine {
 		out = append(out, EventLine{
 			Age:       ageString(eventTime(e)),
 			Namespace: e.Namespace,
-			Type:      e.Type,
 			Reason:    e.Reason,
 			Object:    obj,
 			Message:   e.Message,

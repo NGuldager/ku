@@ -40,7 +40,7 @@ func fakeOverview() *k8s.ClusterOverview {
 		Deployments: 42, DeploymentsReady: 40,
 		NodeIssues: []string{"ip-10-0-1-2 DiskPressure", "ip-10-0-3-4 NotReady"},
 		Warnings: []k8s.EventLine{
-			{Age: "2m", Namespace: "default", Type: "Warning", Reason: "BackOff", Object: "Pod/api-7d9", Message: "Back-off restarting failed container", Count: 12},
+			{Age: "2m", Namespace: "default", Reason: "BackOff", Object: "Pod/api-7d9", Message: "Back-off restarting failed container", Count: 12},
 		},
 	}
 }

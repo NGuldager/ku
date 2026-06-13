@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -90,19 +89,14 @@ func (s *selector) setItems(items []selItem) {
 }
 
 func (s *selector) refilter() {
-	q := s.input.Value()
-	type scored struct{ idx, score int }
-	var ms []scored
-	for i, it := range s.items {
-		if sc, ok := fuzzyScore(q, it.title+" "+it.desc+" "+it.id); ok {
-			ms = append(ms, scored{i, sc})
-		}
+	idx := make([]int, len(s.items))
+	for i := range idx {
+		idx[i] = i
 	}
-	sort.SliceStable(ms, func(i, j int) bool { return ms[i].score > ms[j].score })
-	s.match = s.match[:0]
-	for _, m := range ms {
-		s.match = append(s.match, m.idx)
-	}
+	s.match = fuzzyRank(idx, s.input.Value(), func(i int) string {
+		it := s.items[i]
+		return it.title + " " + it.desc + " " + it.id
+	})
 	s.clampCursor()
 }
 

@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -32,7 +31,7 @@ type tableView struct {
 	filter    textinput.Model
 	showWide  bool
 
-	width, height int
+	width int
 }
 
 func newTableView(th Theme) tableView {
@@ -63,7 +62,6 @@ func newTableView(th Theme) tableView {
 
 func (v *tableView) setSize(w, h int) {
 	v.width = w
-	v.height = h
 	if h < 1 {
 		h = 1
 	}
@@ -150,28 +148,10 @@ func cell(cells []string, i int) string {
 func (v *tableView) rebuild() {
 	vis := v.visibleCols()
 
-	// Filter rows.
-	q := v.filter.Value()
-	v.rows = v.rows[:0]
-	if q == "" {
-		v.rows = append(v.rows, v.allRows...)
-	} else {
-		type scored struct {
-			row   k8s.Row
-			score int
-		}
-		var matches []scored
-		for _, r := range v.allRows {
-			hay := strings.Join(r.Cells, " ")
-			if s, ok := fuzzyScore(q, hay); ok {
-				matches = append(matches, scored{r, s})
-			}
-		}
-		sort.SliceStable(matches, func(i, j int) bool { return matches[i].score > matches[j].score })
-		for _, m := range matches {
-			v.rows = append(v.rows, m.row)
-		}
-	}
+	// Filter rows (an empty filter keeps all rows in their original order).
+	v.rows = fuzzyRank(v.allRows, v.filter.Value(), func(r k8s.Row) string {
+		return strings.Join(r.Cells, " ")
+	})
 
 	// Fit widths.
 	widths := v.fitWidths(vis)
