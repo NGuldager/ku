@@ -1,9 +1,11 @@
-BINARY := kli
+BINARY  := kli
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .PHONY: build install run test vet tidy clean
 
 build:
-	go build -o $(BINARY) .
+	go build -trimpath -ldflags="$(LDFLAGS)" -o $(BINARY) .
 
 # install picks a destination directory by precedence (override with PREFIX=...):
 #   1) ~/.local/bin, if it is on $PATH

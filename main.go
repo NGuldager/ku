@@ -12,11 +12,21 @@ import (
 
 	"github.com/bjarneo/kli/internal/k8s"
 	"github.com/bjarneo/kli/internal/ui"
+	"github.com/bjarneo/kli/internal/upgrade"
 )
 
-const version = "0.1.0"
+// version is set at build time with -ldflags "-X main.version=vX.Y.Z".
+var version = "dev"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "upgrade" {
+		if err := upgrade.Run(version); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	var (
 		ctxFlag, nsFlag, resFlag, themeFlag, kubeconfigFlag string
 		checkFlag, versionFlag                              bool

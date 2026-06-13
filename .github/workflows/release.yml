@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: go test ./...
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          if [ "$VERSION" = "$GITHUB_REF" ]; then
+            VERSION="dev-${GITHUB_SHA::7}"
+          fi
+          BINARY="kli-${GOOS}-${GOARCH}"
+          if [ "$GOOS" = "windows" ]; then
+            BINARY="${BINARY}.exe"
+          fi
+          go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o "$BINARY" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: kli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: kli-*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          sha256sum kli-* > checksums.txt
+          cat checksums.txt
+
+      - name: Generate release notes
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          {
+            echo "## What's Changed"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              git log "${PREV_TAG}..${TAG}" --pretty='- %s (`%h`)'
+              echo
+              echo "Full changelog: https://github.com/${REPO}/compare/${PREV_TAG}...${TAG}"
+            else
+              git log "$TAG" --pretty='- %s (`%h`)'
+            fi
+            echo
+            echo "## Checksums (SHA256)"
+            echo
+            echo '```'
+            cat artifacts/checksums.txt
+            echo '```'
+          } > release_notes.md
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          files: |
+            artifacts/kli-*
+            artifacts/checksums.txt
