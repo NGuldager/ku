@@ -21,12 +21,12 @@ can run any of these and jump to any resource.
 | `y` | YAML |
 | `l` | logs (pods); `f` toggles follow |
 | `e` | edit in `$EDITOR`, applied on save |
-| `s` | shell into a pod, or scale a workload |
+| `s` | shell into a pod, node shell on a node, or scale a workload |
 | `R` | rollout restart (deployments, statefulsets, daemonsets) |
 | `x` | delete (with confirm) |
 
-The bottom bar adapts to the selected resource: pods show logs and shell,
-workloads show scale and restart.
+The bottom bar adapts to the selected resource: pods show logs and shell, nodes
+show a node shell, and workloads show scale and restart.
 
 ## Views and cluster
 

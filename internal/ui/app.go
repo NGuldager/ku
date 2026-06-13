@@ -286,6 +286,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case containersMsg:
 		return a.handleContainers(m)
 
+	case nodeDebugReadyMsg:
+		if m.err != nil {
+			a.setStatus("node shell: "+trimErr(m.err), true)
+			return a, nil
+		}
+		return a.startNodeExec(m)
+
 	case actionDoneMsg:
 		if m.err != nil {
 			a.setStatus(trimErr(m.err), true)
@@ -625,12 +632,13 @@ func (a App) updateTerm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			os.Remove(a.term.editPath) // cancelled: discard the unsaved edit
 			note = "edit cancelled"
 		}
+		cleanup := a.term.onClose // e.g. delete the node debug pod
 		a.term.stop()
 		a.termSession++
 		a.overlay = overlayNone
 		a.screen = screenTable
 		a.setStatus(note, false)
-		return a, nil
+		return a, cleanup
 	}
 	if ti, ok := translateKey(msg); ok && a.term.input != nil {
 		select {
@@ -709,10 +717,12 @@ func (a App) openShellOrScale() (tea.Model, tea.Cmd) {
 	switch {
 	case a.res.IsPod():
 		return a.openShell()
+	case a.res.IsNodes():
+		return a.openNodeShell()
 	case a.res.Scalable():
 		return a.openScale()
 	default:
-		a.setStatus("s: shell needs a pod, scale needs a workload", true)
+		a.setStatus("s: shell needs a pod or node, scale needs a workload", true)
 		return a, nil
 	}
 }
@@ -724,6 +734,28 @@ func (a App) openShell() (tea.Model, tea.Cmd) {
 	}
 	a.execTarget = target{ns: row.Namespace, name: row.Name}
 	return a, containersCmd(a.client, row.Namespace, row.Name, true)
+}
+
+// openNodeShell starts a node shell by spawning a privileged debug pod on the
+// node (the host filesystem is mounted at /host), then exec'ing into it.
+func (a App) openNodeShell() (tea.Model, tea.Cmd) {
+	row, ok := a.table.selected()
+	if !ok {
+		return a, nil
+	}
+	ns := a.namespace
+	if ns == "" {
+		ns = "default"
+	}
+	a.setStatus("starting node shell on "+row.Name+" (creating debug pod)…", false)
+	return a, createNodeDebugCmd(a.client, ns, row.Name)
+}
+
+// startNodeExec opens the terminal in the node debug pod and deletes the pod
+// when the session ends.
+func (a App) startNodeExec(m nodeDebugReadyMsg) (tea.Model, tea.Cmd) {
+	cleanup := deletePodCmd(a.client, m.ns, m.pod)
+	return a.startExec(m.ns, m.pod, m.container, "node "+m.node, k8s.NodeShellCommand, cleanup)
 }
 
 func (a App) handleContainers(m containersMsg) (tea.Model, tea.Cmd) {
@@ -744,7 +776,7 @@ func (a App) handleContainers(m containersMsg) (tea.Model, tea.Cmd) {
 	}
 	if len(m.names) == 1 {
 		if m.forExec {
-			return a.startExec(m.ns, m.pod, m.names[0])
+			return a.startExec(m.ns, m.pod, m.names[0], "", nil, nil)
 		}
 		return a.startLogs(m.ns, m.pod, m.names[0])
 	}
@@ -785,7 +817,10 @@ func (a App) startLogs(ns, pod, container string) (tea.Model, tea.Cmd) {
 	return a, waitForLog(ch)
 }
 
-func (a App) startExec(ns, pod, container string) (tea.Model, tea.Cmd) {
+// startExec opens the embedded-terminal overlay running command (nil = default
+// shell) in a pod container. title labels the panel; onClose, if set, runs when
+// the session ends (e.g. to delete a debug pod).
+func (a App) startExec(ns, pod, container, title string, command []string, onClose tea.Cmd) (tea.Model, tea.Cmd) {
 	a.term.stop()
 	a.termSession++
 	sess := a.termSession
@@ -803,18 +838,22 @@ func (a App) startExec(ns, pod, container string) (tea.Model, tea.Cmd) {
 	t.cancel = cancel
 	t.closeFn = q.Close
 	t.resize = q.Set
+	t.onClose = onClose
 	t.result = result
 	t.input = input
 	t.session = sess
 	t.cols, t.rows = cols, rows
-	t.title = pod + " › " + container
+	if title == "" {
+		title = pod + " › " + container
+	}
+	t.title = title
 	a.term = t
 	a.overlay = overlayTerm
 
 	cl := a.client
 	go runTermInput(ctx, em, input)
 	go func() {
-		err := cl.ExecStream(ctx, ns, pod, container, em, em, q)
+		err := cl.ExecStream(ctx, ns, pod, container, command, em, em, q)
 		em.Close() // unblock the stream's stdin reader and the input goroutine
 		q.Close()
 		result.err = err
@@ -914,7 +953,10 @@ func (a App) handleTermDone(m termDoneMsg) (tea.Model, tea.Cmd) {
 	if m.err != nil {
 		a.term.status = "ended: " + trimErr(m.err)
 	}
-	return a, nil
+	// Run any cleanup (e.g. delete the node debug pod) now that the shell exited.
+	cleanup := a.term.onClose
+	a.term.onClose = nil
+	return a, cleanup
 }
 
 // applyEditedFile reads the edited temp file and applies it, skipping unchanged
@@ -1041,6 +1083,9 @@ func (a App) openPalette() (tea.Model, tea.Cmd) {
 				selItem{title: "Shell into pod", desc: "s", id: "act:shell"},
 			)
 		}
+		if a.res.IsNodes() {
+			items = append(items, selItem{title: "Node shell (debug pod)", desc: "s", id: "act:nodeshell"})
+		}
 		if a.res.Scalable() {
 			items = append(items, selItem{title: "Scale", desc: "s", id: "act:scale"})
 		}
@@ -1126,7 +1171,7 @@ func (a App) applySelection(res selResult) (tea.Model, tea.Cmd) {
 	case selContainer:
 		return a.startLogs(a.logTarget.ns, a.logTarget.name, res.id)
 	case selExecContainer:
-		return a.startExec(a.execTarget.ns, a.execTarget.name, res.id)
+		return a.startExec(a.execTarget.ns, a.execTarget.name, res.id, "", nil, nil)
 	case selScale:
 		n, err := strconv.Atoi(strings.TrimSpace(res.value))
 		if err != nil || n < 0 {
@@ -1157,6 +1202,8 @@ func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
 		return a.openLogs()
 	case "act:shell":
 		return a.openShell()
+	case "act:nodeshell":
+		return a.openNodeShell()
 	case "act:scale":
 		return a.openScale()
 	case "act:restart":
@@ -1405,6 +1452,8 @@ func (a App) hints() []hint {
 	switch {
 	case a.res.IsPod():
 		h = append(h, hint{"l", "logs"}, hint{"s", "shell"})
+	case a.res.IsNodes():
+		h = append(h, hint{"s", "node shell"})
 	case a.res.Scalable():
 		h = append(h, hint{"s", "scale"})
 	}

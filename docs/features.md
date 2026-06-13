@@ -54,12 +54,19 @@ object's kind or name.
 there are several). `f` toggles auto-scroll so you can read back through
 history; `g` / `G` jump to top and bottom.
 
-## Shell into a pod
+## Shell into a pod or node
 
 `s` on a pod opens an interactive shell in an overlay, run inside the TUI using
 a virtual terminal. It runs `bash` if present, otherwise `sh`, over the cluster's
 exec stream (WebSocket with SPDY fallback, like kubectl). `Ctrl+\` detaches; the
 overlay also closes when you `exit`.
+
+`s` on a node opens a node shell the way `kubectl debug node` does: it spawns a
+short-lived privileged debug pod pinned to the node, with the host filesystem
+mounted at `/host`, and drops you into a `chroot /host` shell. The debug pod is
+deleted when you exit or detach. Override the image with `$KLI_DEBUG_IMAGE`
+(default `busybox`). This needs permission to create privileged pods, so it may
+be blocked on clusters with restrictive Pod Security settings.
 
 ## Scale, restart, delete
 

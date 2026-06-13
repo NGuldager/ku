@@ -63,10 +63,14 @@ func (q *ResizeQueue) Close() {
 	q.once.Do(func() { close(q.done) })
 }
 
-// ExecStream runs an interactive shell in a pod container over SPDY, wiring the
-// given streams. stdin/stdout are typically a virtual terminal emulator. The
-// call blocks until the shell exits or ctx is cancelled.
-func (c *Client) ExecStream(ctx context.Context, ns, pod, container string, stdin io.Reader, stdout io.Writer, q *ResizeQueue) error {
+// ExecStream runs an interactive command in a pod container over SPDY, wiring
+// the given streams. command defaults to an interactive shell when nil.
+// stdin/stdout are typically a virtual terminal emulator. The call blocks until
+// the command exits or ctx is cancelled.
+func (c *Client) ExecStream(ctx context.Context, ns, pod, container string, command []string, stdin io.Reader, stdout io.Writer, q *ResizeQueue) error {
+	if command == nil {
+		command = defaultShell
+	}
 	req := c.clientset.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -75,7 +79,7 @@ func (c *Client) ExecStream(ctx context.Context, ns, pod, container string, stdi
 		SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{
 			Container: container,
-			Command:   defaultShell,
+			Command:   command,
 			Stdin:     stdin != nil,
 			Stdout:    stdout != nil,
 			Stderr:    false, // merged into stdout under a TTY

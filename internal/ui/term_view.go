@@ -33,6 +33,7 @@ type termView struct {
 	cancel  func()
 	closeFn func()               // transport-specific teardown (queue/pty close)
 	resize  func(cols, rows int) // push size to the transport
+	onClose tea.Cmd              // optional cleanup run when the session ends (e.g. delete a debug pod)
 	result  *termResult
 	input   chan termInput
 	title   string

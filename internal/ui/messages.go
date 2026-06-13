@@ -127,6 +127,36 @@ func loadDetailCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.Cm
 	}
 }
 
+type nodeDebugReadyMsg struct {
+	ns        string
+	pod       string
+	container string
+	node      string
+	err       error
+}
+
+// createNodeDebugCmd spawns a debug pod on the node and waits for it to run.
+// It uses a longer timeout than opCtx because the image may need pulling.
+func createNodeDebugCmd(cl *k8s.Client, ns, node string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		pod, container, err := cl.CreateNodeDebugPod(ctx, ns, node)
+		return nodeDebugReadyMsg{ns: ns, pod: pod, container: container, node: node, err: err}
+	}
+}
+
+// deletePodCmd removes a pod without surfacing a status message (used to clean
+// up node debug pods).
+func deletePodCmd(cl *k8s.Client, ns, pod string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := opCtx()
+		defer cancel()
+		_ = cl.DeletePod(ctx, ns, pod)
+		return nil
+	}
+}
+
 func loadCockpitCmd(cl *k8s.Client) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := opCtx()
