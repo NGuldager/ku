@@ -13,6 +13,7 @@ type confirmView struct {
 	message string
 	danger  bool
 	action  tea.Cmd
+	cancel  tea.Cmd
 }
 
 func (c confirmView) View(width, height int) string {

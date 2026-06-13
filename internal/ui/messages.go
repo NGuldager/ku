@@ -303,6 +303,13 @@ func applyEditCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name, path string) t
 	}
 }
 
+func cancelEditCmd(path string) tea.Cmd {
+	return func() tea.Msg {
+		os.Remove(path)
+		return statusMsg{text: "edit cancelled", err: false}
+	}
+}
+
 func tickCmd() tea.Cmd {
 	return tea.Tick(refreshInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }

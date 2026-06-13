@@ -724,6 +724,7 @@ func (a App) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, a.confirm.action
 	case "n", "N", "esc":
 		a.overlay = overlayNone
+		return a, a.confirm.cancel
 	}
 	return a, nil
 }
@@ -1053,8 +1054,7 @@ func (a App) handleTermDone(m termDoneMsg) (tea.Model, tea.Cmd) {
 	return a, cleanup
 }
 
-// applyEditedFile reads the edited temp file and applies it, skipping unchanged
-// edits, then removes the file.
+// applyEditedFile reads the edited temp file and prompts before applying it.
 func (a App) applyEditedFile(cl *k8s.Client, res k8s.ResourceInfo, ns, name, path, original string) (tea.Model, tea.Cmd) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -1070,7 +1070,17 @@ func (a App) applyEditedFile(cl *k8s.Client, res k8s.ResourceInfo, ns, name, pat
 	if cl == nil {
 		cl = a.client
 	}
-	return a, applyEditCmd(cl, res, ns, name, path)
+	loc := qualified(ns, name)
+	a.confirm = confirmView{
+		th:      a.theme,
+		title:   "Apply edit",
+		message: "Apply changes to " + loc + " ?",
+		action:  applyEditCmd(cl, res, ns, name, path),
+		cancel:  cancelEditCmd(path),
+	}
+	a.overlay = overlayConfirm
+	a.setStatus("review edit confirmation", false)
+	return a, nil
 }
 
 func (a App) openSort() (tea.Model, tea.Cmd) {
