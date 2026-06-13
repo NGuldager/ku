@@ -23,6 +23,21 @@ func truncate(s string, w int) string {
 // spread lays out left and right text on one line of the given width, padding
 // the gap between them (minimum one space).
 func spread(left, right string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	rw := lipgloss.Width(right)
+	if rw >= width {
+		return ansi.Truncate(right, width, "")
+	}
+	if lipgloss.Width(left)+1+rw > width {
+		budget := width - rw - 1
+		if budget <= 0 {
+			left = ""
+		} else {
+			left = ansi.Truncate(left, budget, "…")
+		}
+	}
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		gap = 1

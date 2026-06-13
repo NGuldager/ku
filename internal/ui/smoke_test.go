@@ -156,8 +156,8 @@ func TestPaneRenderingFitsShortBody(t *testing.T) {
 	th := PickTheme("ansi")
 	app := App{theme: th}
 
-	for _, h := range []int{1, 2, 3} {
-		out := app.renderPane(th.PaneActive, "pods", 20, h)
+	for _, h := range []int{1, 2, 3, 5} {
+		out := app.renderPane(th.PaneActive, strings.Repeat("pod-name-", 12), 20, h)
 		if lines := strings.Count(out, "\n") + 1; lines != h {
 			t.Fatalf("renderPane height=%d rendered %d lines, want %d:\n%s", h, lines, h, out)
 		}
@@ -166,6 +166,18 @@ func TestPaneRenderingFitsShortBody(t *testing.T) {
 				t.Fatalf("renderPane height=%d line width %d exceeds 20: %q", h, w, ln)
 			}
 		}
+	}
+}
+
+func TestSpreadTruncatesLongLeftSide(t *testing.T) {
+	left := PickTheme("ansi").ModalTitle.Render("pod/" + strings.Repeat("api-", 20))
+	right := "100%"
+	out := spread(left, right, 24)
+	if w := lipgloss.Width(out); w > 24 {
+		t.Fatalf("spread width = %d, want <= 24: %q", w, out)
+	}
+	if !strings.Contains(out, right) {
+		t.Fatalf("spread dropped right side %q: %q", right, out)
 	}
 }
 

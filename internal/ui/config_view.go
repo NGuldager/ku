@@ -74,9 +74,9 @@ func renderConfig(th Theme, res k8s.ResourceInfo, obj map[string]interface{}, wi
 		if len(lines) > 0 {
 			lines = append(lines, "")
 		}
-		lines = append(lines, th.ModalTitle.Render(title))
+		lines = append(lines, ansi.Truncate(th.ModalTitle.Render(title), width, ""))
 		for _, r := range rows {
-			lines = append(lines, configKV(th, r.key, r.value))
+			lines = append(lines, ansi.Truncate(configKV(th, r.key, r.value), width, ""))
 		}
 	}
 
