@@ -8,13 +8,21 @@ kli uses your default kubeconfig and the current context. No config required.
 
 ## Install
 
+Install the latest release with the installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bjarneo/kli/main/install.sh | sh
 ```
+
+Or with Go:
+
+```bash
 go install github.com/bjarneo/kli@latest
 ```
 
 Or from a clone:
 
-```
+```bash
 make install   # builds and installs to ~/.local/bin, /usr/local/bin, or your last $PATH dir
 go build -o kli .
 ```
