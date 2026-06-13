@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -24,6 +25,7 @@ const (
 	screenTable screen = iota
 	screenDetail
 	screenLogs
+	screenCockpit
 )
 
 type overlayKind int
@@ -78,9 +80,12 @@ type App struct {
 	screen  screen
 	focus   focusKind
 	sidebar sidebar
+	cockpit cockpitView
 	table   tableView
 	detail  detailView
 	logs    logView
+
+	cockpitAt time.Time // last cockpit refresh, for throttling
 
 	overlay overlayKind
 	sel     selector
@@ -114,6 +119,7 @@ func NewApp(cl *k8s.Client, th Theme) App {
 		keys:   defaultKeys(),
 	}
 	a.sidebar = newSidebar(th, cl.Registry())
+	a.cockpit = newCockpitView(th)
 	a.table = newTableView(th)
 	a.detail = newDetailView(th)
 	a.logs = newLogView(th)
@@ -131,7 +137,9 @@ func NewApp(cl *k8s.Client, th Theme) App {
 	} else if all := cl.Registry().All(); len(all) > 0 {
 		a.res = all[0]
 	}
-	a.sidebar.syncTo(a.res.Key())
+	// The cluster overview (cockpit) is the default landing screen.
+	a.screen = screenCockpit
+	a.sidebar.syncTo(overviewKey)
 	a.namespace = cl.Namespace
 	a.lastNS = cl.Namespace
 	if a.lastNS == "" {
@@ -144,7 +152,13 @@ func NewApp(cl *k8s.Client, th Theme) App {
 }
 
 func (a App) Init() tea.Cmd {
-	return tea.Batch(a.spin.Tick, loadResourceCmd(a.client, a.res, a.namespace), tickCmd())
+	cmds := []tea.Cmd{a.spin.Tick, tickCmd()}
+	if a.screen == screenCockpit {
+		cmds = append(cmds, loadCockpitCmd(a.client))
+	} else {
+		cmds = append(cmds, loadResourceCmd(a.client, a.res, a.namespace))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (a App) bodyH() int {
@@ -210,11 +224,30 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		cmds := []tea.Cmd{tickCmd()}
-		if a.screen == screenTable && a.overlay == overlayNone && !a.loading {
+		switch {
+		case a.screen == screenTable && a.overlay == overlayNone && !a.loading:
 			a.loading = true
 			cmds = append(cmds, loadResourceCmd(a.client, a.res, a.namespace), a.spin.Tick)
+		case a.screen == screenCockpit && a.overlay == overlayNone && !a.loading &&
+			time.Time(m).Sub(a.cockpitAt) >= 5*time.Second:
+			// The cockpit aggregates many lists, so refresh it less often.
+			a.loading = true
+			a.cockpitAt = time.Time(m)
+			cmds = append(cmds, loadCockpitCmd(a.client), a.spin.Tick)
 		}
 		return a, tea.Batch(cmds...)
+
+	case cockpitLoadedMsg:
+		a.loading = false
+		if m.err != nil {
+			a.setStatus(trimErr(m.err), true)
+		} else {
+			a.cockpit.setData(m.overview)
+			if !a.statusErr {
+				a.status = ""
+			}
+		}
+		return a, nil
 
 	case resourcesLoadedMsg:
 		if m.res.Key() == a.res.Key() && m.ns == a.namespace {
@@ -363,9 +396,41 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.updateDetail(msg)
 	case screenLogs:
 		return a.updateLogs(msg)
+	case screenCockpit:
+		return a.updateCockpit(msg)
 	default:
 		return a.updateTable(msg)
 	}
+}
+
+func (a App) updateCockpit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, a.keys.Quit):
+		a.logs.stop()
+		return a, tea.Quit
+	case key.Matches(msg, a.keys.Help):
+		a.overlay = overlayHelp
+		return a, nil
+	case key.Matches(msg, a.keys.Palette):
+		return a.openPalette()
+	case key.Matches(msg, a.keys.Jump):
+		return a.openResourceJump()
+	case key.Matches(msg, a.keys.Namespace):
+		return a.openNamespacePicker()
+	case key.Matches(msg, a.keys.Context):
+		return a.openContextPicker()
+	case key.Matches(msg, a.keys.Refresh):
+		return a.reloadCockpit()
+	case key.Matches(msg, a.keys.Focus):
+		if a.sidebarVisible() {
+			a.focus = toggleFocus(a.focus)
+		}
+		return a, nil
+	}
+	if a.focus == focusSidebar {
+		return a.updateSidebarKeys(msg)
+	}
+	return a, nil
 }
 
 func (a App) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -454,8 +519,11 @@ func (a App) updateSidebarKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.sidebar.move(5)
 		return a, nil
 	case msg.String() == "enter" || msg.String() == "right" || msg.String() == "l":
-		if ri, ok := a.sidebar.current(); ok {
-			return a.switchResource(ri)
+		if e, ok := a.sidebar.current(); ok {
+			if e.overview {
+				return a.switchToCockpit()
+			}
+			return a.switchResource(e.res)
 		}
 		return a, nil
 	}
@@ -617,6 +685,18 @@ func (a App) switchResource(ri k8s.ResourceInfo) (tea.Model, tea.Cmd) {
 	a.table.stopFilter(true)
 	a.table.setData(nil)
 	return a.reload()
+}
+
+func (a App) switchToCockpit() (tea.Model, tea.Cmd) {
+	a.screen = screenCockpit
+	a.focus = focusMain
+	a.sidebar.syncTo(overviewKey)
+	return a.reloadCockpit()
+}
+
+func (a App) reloadCockpit() (tea.Model, tea.Cmd) {
+	a.loading = true
+	return a, tea.Batch(loadCockpitCmd(a.client), a.spin.Tick)
 }
 
 func (a App) openDetail() (tea.Model, tea.Cmd) {
@@ -1136,6 +1216,9 @@ func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
 		a.table.startFilter()
 		return a, nil
 	case id == "cmd:refresh":
+		if a.screen == screenCockpit {
+			return a.reloadCockpit()
+		}
 		return a.reload()
 	case id == "cmd:namespace":
 		return a.openNamespacePicker()
@@ -1179,6 +1262,8 @@ func (a App) View() string {
 			body = a.detail.View()
 		case screenLogs:
 			body = a.logs.View()
+		case screenCockpit:
+			body = a.cockpitScreen()
 		default:
 			body = a.tableScreen()
 		}
@@ -1192,10 +1277,16 @@ func (a App) View() string {
 	return lipgloss.NewStyle().MaxWidth(a.width).Render(frame)
 }
 
-func (a App) tableScreen() string {
-	if !a.sidebarVisible() {
-		return a.table.View()
+func (a App) activeNavKey() string {
+	if a.screen == screenCockpit {
+		return overviewKey
 	}
+	return a.res.Key()
+}
+
+// paneScreen renders the [sidebar | main] two-pane layout with focus-aware
+// borders. main is already-rendered content for the main pane.
+func (a App) paneScreen(main string) string {
 	bh := a.bodyH()
 	sw := a.sidebarWidth()
 	mainW := a.width - sw
@@ -1206,11 +1297,36 @@ func (a App) tableScreen() string {
 		sideStyle = a.theme.PaneActive
 		mainStyle = a.theme.PaneInactive
 	}
-
 	side := sideStyle.Width(sw - 2).Height(bh - 2).MaxHeight(bh).
-		Render(a.sidebar.View(a.res.Key(), a.focus == focusSidebar))
-	main := mainStyle.Width(mainW - 2).Height(bh - 2).MaxHeight(bh).
-		Render(a.table.View())
+		Render(a.sidebar.View(a.activeNavKey(), a.focus == focusSidebar))
+	box := mainStyle.Width(mainW - 2).Height(bh - 2).MaxHeight(bh).Render(main)
+	return lipgloss.JoinHorizontal(lipgloss.Top, side, box)
+}
+
+func (a App) tableScreen() string {
+	if !a.sidebarVisible() {
+		return a.table.View()
+	}
+	return a.paneScreen(a.table.View())
+}
+
+func (a App) cockpitScreen() string {
+	if !a.sidebarVisible() {
+		return a.cockpit.View(a.width, a.bodyH())
+	}
+	// The cockpit's own panels already have borders, so render them directly
+	// beside the nav rather than inside another bordered pane.
+	bh := a.bodyH()
+	sw := a.sidebarWidth()
+	mainW := a.width - sw
+
+	sideStyle := a.theme.PaneInactive
+	if a.focus == focusSidebar {
+		sideStyle = a.theme.PaneActive
+	}
+	side := sideStyle.Width(sw - 2).Height(bh - 2).MaxHeight(bh).
+		Render(a.sidebar.View(a.activeNavKey(), a.focus == focusSidebar))
+	main := a.cockpit.View(mainW, bh)
 	return lipgloss.JoinHorizontal(lipgloss.Top, side, main)
 }
 
@@ -1221,19 +1337,26 @@ func (a App) headerView() string {
 	chip := func(k, v string) string {
 		return th.HeaderKey.Render(k+" ") + th.HeaderVal.Render(v)
 	}
+	resLabel := a.res.Title()
+	if a.screen == screenCockpit {
+		resLabel = "overview"
+	}
 	chips := []string{
 		chip("ctx", shortContext(a.client.ContextName)),
 		chip("ns", a.nsLabel()),
-		chip("res", a.res.Title()),
+		chip("res", resLabel),
 	}
 	// Surface an applied filter so a narrowed list never looks like the whole set.
 	if a.table.filterActive() && !a.table.filtering {
 		chips = append(chips, th.HeaderKey.Render("filter ")+th.Warn.Render("/"+truncate(a.table.filterValue(), 24)))
 	}
 
-	right := th.Dim.Render(itoa(a.table.count()) + " items")
-	if a.res.Namespaced && a.namespace == "" {
-		right = th.Dim.Render(itoa(a.table.count()) + " items · all ns")
+	right := ""
+	if a.screen != screenCockpit {
+		right = th.Dim.Render(itoa(a.table.count()) + " items")
+		if a.res.Namespaced && a.namespace == "" {
+			right = th.Dim.Render(itoa(a.table.count()) + " items · all ns")
+		}
 	}
 
 	avail := a.width - lipgloss.Width(right) - 2
@@ -1322,6 +1445,11 @@ func (a App) hints() []hint {
 		return []hint{{"↑↓", "scroll"}, {"e", "edit"}, {"|", "yq"}, {"esc", "back"}}
 	case screenLogs:
 		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"esc", "back"}}
+	case screenCockpit:
+		if a.focus == focusSidebar {
+			return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"?", "help"}}
+		}
+		return []hint{{"tab", "nav"}, {":", "jump"}, {"^k", "palette"}, {"r", "refresh"}, {"n", "ns"}, {"c", "ctx"}, {"?", "help"}, {"q", "quit"}}
 	}
 	if a.focus == focusSidebar {
 		return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"?", "help"}}

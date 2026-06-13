@@ -66,6 +66,11 @@ type clientReadyMsg struct {
 	err    error
 }
 
+type cockpitLoadedMsg struct {
+	overview *k8s.ClusterOverview
+	err      error
+}
+
 type editReadyMsg struct {
 	path     string
 	original string
@@ -122,6 +127,15 @@ func loadDetailCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.Cm
 			title = ns + "/" + name
 		}
 		return detailLoadedMsg{res: res, ns: ns, name: name, title: title, yaml: y, err: err}
+	}
+}
+
+func loadCockpitCmd(cl *k8s.Client) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := opCtx()
+		defer cancel()
+		o, err := cl.ClusterStats(ctx)
+		return cockpitLoadedMsg{overview: o, err: err}
 	}
 }
 

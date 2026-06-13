@@ -30,6 +30,19 @@ func fakeTable() *k8s.Table {
 	}
 }
 
+func fakeOverview() *k8s.ClusterOverview {
+	return &k8s.ClusterOverview{
+		Version: "v1.31.0", Nodes: 5, NodesReady: 5, HasMetrics: true,
+		CPUUsedMilli: 4200, CPUAllocMilli: 16000,
+		MemUsedBytes: 12 << 30, MemAllocBytes: 32 << 30,
+		Namespaces: 23, Pods: 200, PodRunning: 190, PodPending: 2, PodFailed: 1,
+		Deployments: 42, DeploymentsReady: 40,
+		Warnings: []k8s.EventLine{
+			{Age: "2m", Namespace: "default", Type: "Warning", Reason: "BackOff", Object: "Pod/api-7d9", Message: "Back-off restarting failed container"},
+		},
+	}
+}
+
 func mkKey(s string) tea.KeyMsg {
 	switch s {
 	case "esc":
@@ -67,8 +80,14 @@ func TestAppSmoke(t *testing.T) {
 		for _, size := range [][2]int{{120, 40}, {80, 24}, {40, 12}, {20, 6}, {12, 8}} {
 			m, _ = m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 
-			// Load synthetic data and render the table.
+			// Cockpit is the default screen; render it populated.
+			m, _ = m.Update(cockpitLoadedMsg{overview: fakeOverview()})
+			mustRender(t, m, themeName, size)
+
+			// Switch to the table and load synthetic data for the rest.
 			a := m.(App)
+			a.screen = screenTable
+			m = a
 			m, _ = m.Update(resourcesLoadedMsg{res: a.res, ns: a.namespace, tbl: fakeTable()})
 			mustRender(t, m, themeName, size)
 

@@ -43,11 +43,15 @@ var navCatalog = []struct {
 	}},
 }
 
+// overviewKey marks the sidebar entry that opens the cockpit dashboard.
+const overviewKey = "~overview"
+
 type navEntry struct {
-	header bool
-	label  string
-	res    k8s.ResourceInfo
-	key    string
+	header   bool
+	overview bool
+	label    string
+	res      k8s.ResourceInfo
+	key      string
 }
 
 // sidebar is the left navigation pane listing common resource kinds.
@@ -62,6 +66,11 @@ type sidebar struct {
 
 func newSidebar(th Theme, reg *k8s.Registry) sidebar {
 	s := sidebar{th: th}
+
+	// The cockpit overview is the first, always-present entry.
+	s.selectable = append(s.selectable, len(s.entries))
+	s.entries = append(s.entries, navEntry{overview: true, label: "Overview", key: overviewKey})
+
 	for _, sec := range navCatalog {
 		var items []navEntry
 		for _, it := range sec.items {
@@ -112,11 +121,11 @@ func (s *sidebar) moveBottom() {
 	}
 }
 
-func (s *sidebar) current() (k8s.ResourceInfo, bool) {
+func (s *sidebar) current() (navEntry, bool) {
 	if len(s.selectable) == 0 {
-		return k8s.ResourceInfo{}, false
+		return navEntry{}, false
 	}
-	return s.entries[s.selectable[s.cursor]].res, true
+	return s.entries[s.selectable[s.cursor]], true
 }
 
 // syncTo moves the cursor to the entry matching key, if present, so the

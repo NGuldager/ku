@@ -34,6 +34,7 @@ Press `?` for help and `Ctrl+K` for the command palette.
 
 ## Highlights
 
+- A cockpit overview on launch: cluster health, node CPU and memory gauges, pod and deployment status, and recent warnings.
 - Server-rendered tables for any resource, the same columns as `kubectl get`, including CRDs.
 - lazygit-style layout: a left resource nav, `Tab` between panes, and a status bar that always shows the keys that work right now.
 - Logs, edit-in-editor (applied on save), shell into a pod, delete, and scale, all in overlays inside the TUI.

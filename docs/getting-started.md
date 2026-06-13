@@ -34,15 +34,18 @@ kli --version
 
 ## Layout
 
-The screen has three parts:
+kli opens on the cockpit, a cluster overview (health, node CPU/memory, pods,
+deployments, and recent warnings). From there:
 
-- A left nav with common resource kinds, grouped by category.
-- The main table, server-rendered with the same columns as `kubectl get`.
-- A status bar that always shows the keys available right now, with the creator
+- A left nav lists Overview plus common resource kinds, grouped by category.
+- The main area shows the cockpit or, once you pick a resource, its table,
+  server-rendered with the same columns as `kubectl get`.
+- A status bar always shows the keys available right now, with the creator
   handle in the bottom-right.
 
-Press `Tab` to move focus between the nav and the table. The focused pane has a
-highlighted border.
+Press `Tab` to move focus between the nav and the main area, `Enter` on a nav
+entry to open it, and the Overview entry to return to the cockpit. The focused
+pane has a highlighted border.
 
 ## Themes
 

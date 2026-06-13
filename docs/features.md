@@ -1,5 +1,14 @@
 # Features
 
+## Cockpit overview
+
+kli opens on a cockpit: a single-screen overview of the cluster. It shows the
+server version and node readiness, live CPU and memory gauges (from the metrics
+API), pod counts by phase, deployment readiness, and the most recent warning
+events. It refreshes every few seconds. Reach it any time from the Overview
+entry at the top of the nav, and press Enter on a resource (or `:` / `Ctrl+K`)
+to drill in.
+
 ## Any resource, real columns
 
 kli lists resources by asking the API server for the `Table` representation, the
