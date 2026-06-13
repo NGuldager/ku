@@ -152,6 +152,23 @@ func TestAppSmoke(t *testing.T) {
 	}
 }
 
+func TestPaneRenderingFitsShortBody(t *testing.T) {
+	th := PickTheme("ansi")
+	app := App{theme: th}
+
+	for _, h := range []int{1, 2, 3} {
+		out := app.renderPane(th.PaneActive, "pods", 20, h)
+		if lines := strings.Count(out, "\n") + 1; lines != h {
+			t.Fatalf("renderPane height=%d rendered %d lines, want %d:\n%s", h, lines, h, out)
+		}
+		for _, ln := range strings.Split(out, "\n") {
+			if w := lipgloss.Width(ln); w > 20 {
+				t.Fatalf("renderPane height=%d line width %d exceeds 20: %q", h, w, ln)
+			}
+		}
+	}
+}
+
 func mustRender(t *testing.T, m tea.Model, theme string, size [2]int) {
 	t.Helper()
 	defer func() {

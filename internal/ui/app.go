@@ -1465,6 +1465,9 @@ func (a App) paneScreen(main string) string {
 }
 
 func (a App) renderPane(style lipgloss.Style, content string, outerW, outerH int) string {
+	if outerH < 3 {
+		return clampBlock(content, outerW, outerH)
+	}
 	return style.Width(paneStyleWidth(outerW)).Height(paneStyleHeight(outerH)).MaxHeight(outerH).Render(content)
 }
 
