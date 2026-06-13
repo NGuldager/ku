@@ -2,8 +2,11 @@ package k8s
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"sort"
+	"time"
+	"unicode/utf8"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -23,18 +26,52 @@ func (c *Client) resourceClient(res ResourceInfo, namespace string) dynamic.Reso
 }
 
 // GetYAML fetches a single object and renders it as YAML with managedFields
-// stripped for readability.
-func (c *Client) GetYAML(ctx context.Context, res ResourceInfo, namespace, name string) (string, error) {
+// stripped for readability. When decodeSecrets is set and the object is a
+// Secret, its base64 data values are decoded for viewing (callers that intend
+// to edit pass false so the round-trip stays valid base64).
+func (c *Client) GetYAML(ctx context.Context, res ResourceInfo, namespace, name string, decodeSecrets bool) (string, error) {
 	obj, err := c.resourceClient(res, namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
 	unstructured.RemoveNestedField(obj.Object, "metadata", "managedFields")
+	if decodeSecrets && res.Group == "" && res.Kind == "Secret" {
+		decodeSecretData(obj.Object)
+	}
 	b, err := sigsyaml.Marshal(obj.Object)
 	if err != nil {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// decodeSecretData replaces base64 data values with their decoded text in place
+// (for display). Binary values that are not valid UTF-8 are left as base64.
+func decodeSecretData(obj map[string]interface{}) {
+	data, ok := obj["data"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	for k, v := range data {
+		s, ok := v.(string)
+		if !ok {
+			continue
+		}
+		dec, err := base64.StdEncoding.DecodeString(s)
+		if err == nil && utf8.Valid(dec) {
+			data[k] = string(dec)
+		}
+	}
+}
+
+// RolloutRestart triggers a rolling restart of a workload by stamping the pod
+// template with a restartedAt annotation, the same mechanism kubectl uses.
+func (c *Client) RolloutRestart(ctx context.Context, res ResourceInfo, namespace, name string) error {
+	ts := time.Now().Format(time.RFC3339)
+	patch := []byte(fmt.Sprintf(
+		`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":%q}}}}}`, ts))
+	_, err := c.resourceClient(res, namespace).Patch(ctx, name, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+	return err
 }
 
 // Delete removes a single object.

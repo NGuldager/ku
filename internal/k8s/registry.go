@@ -62,6 +62,20 @@ func (r ResourceInfo) Scalable() bool {
 	return false
 }
 
+// Restartable reports whether the resource supports a rolling restart.
+func (r ResourceInfo) Restartable() bool {
+	switch r.Resource {
+	case "deployments", "statefulsets", "daemonsets":
+		return true
+	}
+	return false
+}
+
+// IsNodes reports whether this is the core Node list.
+func (r ResourceInfo) IsNodes() bool {
+	return r.Group == "" && r.Resource == "nodes"
+}
+
 // Registry is an in-memory catalog of discovered resources with alias lookup.
 type Registry struct {
 	all   []ResourceInfo

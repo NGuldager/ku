@@ -102,6 +102,9 @@ func loadResourceCmd(cl *k8s.Client, res k8s.ResourceInfo, ns string) tea.Cmd {
 		ctx, cancel := opCtx()
 		defer cancel()
 		tbl, err := cl.ListTable(ctx, res, ns)
+		if err == nil && res.IsNodes() {
+			_ = cl.AppendNodeStats(ctx, tbl) // best-effort: skip if metrics are absent
+		}
 		return resourcesLoadedMsg{res: res, ns: ns, tbl: tbl, err: err}
 	}
 }
@@ -110,7 +113,7 @@ func loadDetailCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.Cm
 	return func() tea.Msg {
 		ctx, cancel := opCtx()
 		defer cancel()
-		y, err := cl.GetYAML(ctx, res, ns, name)
+		y, err := cl.GetYAML(ctx, res, ns, name, true) // decode secrets for viewing
 		title := res.Resource + "/" + name
 		if ns != "" {
 			title = ns + "/" + name
@@ -172,7 +175,7 @@ func prepareEditCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.C
 	return func() tea.Msg {
 		ctx, cancel := opCtx()
 		defer cancel()
-		y, err := cl.GetYAML(ctx, res, ns, name)
+		y, err := cl.GetYAML(ctx, res, ns, name, false) // raw base64 for round-trip edits
 		if err != nil {
 			return editReadyMsg{err: err}
 		}
