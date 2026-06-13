@@ -1167,7 +1167,7 @@ func (a App) applySelection(res selResult) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		a.setStatus("switching context…", false)
-		return a, switchContextCmd(res.id)
+		return a, switchContextCmd(res.id, a.client.Kubeconfig())
 	case selContainer:
 		return a.startLogs(a.logTarget.ns, a.logTarget.name, res.id)
 	case selExecContainer:

@@ -18,14 +18,15 @@ const version = "0.1.0"
 
 func main() {
 	var (
-		ctxFlag, nsFlag, resFlag, themeFlag string
-		checkFlag, versionFlag              bool
+		ctxFlag, nsFlag, resFlag, themeFlag, kubeconfigFlag string
+		checkFlag, versionFlag                              bool
 	)
 	flag.StringVar(&ctxFlag, "context", "", "kubeconfig context to use (default: current-context)")
 	flag.StringVar(&nsFlag, "namespace", "", "initial namespace (empty = all namespaces)")
 	flag.StringVar(&nsFlag, "n", "", "initial namespace (shorthand)")
 	flag.StringVar(&resFlag, "resource", "", "initial resource, e.g. pods, deploy, svc")
 	flag.StringVar(&themeFlag, "theme", "", "color theme: ansi (default) or tokyonight")
+	flag.StringVar(&kubeconfigFlag, "kubeconfig", "", "path to the kubeconfig file (default: $KUBECONFIG or ~/.kube/config)")
 	flag.BoolVar(&checkFlag, "check", false, "run a read-only connectivity check and exit")
 	flag.BoolVar(&versionFlag, "version", false, "print version and exit")
 	flag.Parse()
@@ -35,7 +36,7 @@ func main() {
 		fmt.Println("kli", version)
 		return
 	case checkFlag:
-		if err := check(ctxFlag, nsFlag, resFlag); err != nil {
+		if err := check(ctxFlag, kubeconfigFlag, nsFlag, resFlag); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
@@ -43,10 +44,11 @@ func main() {
 	}
 
 	if err := ui.Run(ui.Options{
-		Context:   ctxFlag,
-		Namespace: nsFlag,
-		Resource:  resFlag,
-		Theme:     themeFlag,
+		Context:    ctxFlag,
+		Namespace:  nsFlag,
+		Resource:   resFlag,
+		Theme:      themeFlag,
+		Kubeconfig: kubeconfigFlag,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -55,11 +57,11 @@ func main() {
 
 // check performs a read-only listing to validate connectivity and discovery
 // without starting the UI. Useful in non-interactive environments.
-func check(ctxName, ns, resQuery string) error {
+func check(ctxName, kubeconfig, ns, resQuery string) error {
 	if resQuery == "" {
 		resQuery = "pods"
 	}
-	cl, err := k8s.NewClient(ctxName)
+	cl, err := k8s.NewClient(ctxName, kubeconfig)
 	if err != nil {
 		return err
 	}

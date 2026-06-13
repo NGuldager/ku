@@ -8,10 +8,11 @@ import (
 
 // Options configures a kli session.
 type Options struct {
-	Context   string
-	Namespace string
-	Resource  string
-	Theme     string
+	Context    string
+	Namespace  string
+	Resource   string
+	Theme      string
+	Kubeconfig string // explicit kubeconfig path ("" = default lookup)
 }
 
 // Run connects to the cluster and starts the interactive TUI. Flags take
@@ -25,10 +26,10 @@ func Run(opts Options) error {
 	if ctxName == "" && hasSaved {
 		ctxName = saved.Context
 	}
-	cl, err := k8s.NewClient(ctxName)
+	cl, err := k8s.NewClient(ctxName, opts.Kubeconfig)
 	if err != nil && opts.Context == "" && ctxName != "" {
 		// The remembered context may no longer exist; fall back to the default.
-		cl, err = k8s.NewClient("")
+		cl, err = k8s.NewClient("", opts.Kubeconfig)
 	}
 	if err != nil {
 		return err

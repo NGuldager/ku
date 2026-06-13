@@ -33,15 +33,20 @@ type Client struct {
 	dynamic    dynamic.Interface
 	disco      discovery.DiscoveryInterface
 
-	registry *Registry
-	contexts []string
+	registry   *Registry
+	contexts   []string
+	kubeconfig string // explicit kubeconfig path, reused when switching context
 }
 
-// NewClient loads the default kubeconfig (respecting $KUBECONFIG and
-// ~/.kube/config) and builds a client. If contextOverride is non-empty it
-// selects that context instead of the kubeconfig's current-context.
-func NewClient(contextOverride string) (*Client, error) {
+// NewClient builds a client from the kubeconfig. kubeconfigPath, if non-empty,
+// overrides the default lookup ($KUBECONFIG, then ~/.kube/config). If
+// contextOverride is non-empty it selects that context instead of the
+// kubeconfig's current-context.
+func NewClient(contextOverride, kubeconfigPath string) (*Client, error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if kubeconfigPath != "" {
+		rules.ExplicitPath = kubeconfigPath
+	}
 	overrides := &clientcmd.ConfigOverrides{}
 	if contextOverride != "" {
 		overrides.CurrentContext = contextOverride
@@ -100,6 +105,7 @@ func NewClient(contextOverride string) (*Client, error) {
 		dynamic:     dyn,
 		disco:       disco,
 		contexts:    contexts,
+		kubeconfig:  kubeconfigPath,
 	}
 
 	// Discovery may be partial (an aggregated API can be down) but should not
@@ -142,3 +148,7 @@ func (c *Client) Registry() *Registry { return c.registry }
 
 // Contexts returns the sorted list of context names in the kubeconfig.
 func (c *Client) Contexts() []string { return c.contexts }
+
+// Kubeconfig returns the explicit kubeconfig path in use ("" for the default),
+// so a context switch can reuse it.
+func (c *Client) Kubeconfig() string { return c.kubeconfig }

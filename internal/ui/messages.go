@@ -107,8 +107,14 @@ func loadResourceCmd(cl *k8s.Client, res k8s.ResourceInfo, ns string) tea.Cmd {
 		ctx, cancel := opCtx()
 		defer cancel()
 		tbl, err := cl.ListTable(ctx, res, ns)
-		if err == nil && res.IsNodes() {
-			_ = cl.AppendNodeStats(ctx, tbl) // best-effort: skip if metrics are absent
+		if err == nil {
+			// Best-effort live usage columns; skipped if metrics are absent.
+			switch {
+			case res.IsNodes():
+				_ = cl.AppendNodeStats(ctx, tbl)
+			case res.IsPod():
+				_ = cl.AppendPodStats(ctx, tbl, ns)
+			}
 		}
 		return resourcesLoadedMsg{res: res, ns: ns, tbl: tbl, err: err}
 	}
@@ -219,9 +225,9 @@ func restartCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.Cmd {
 	}
 }
 
-func switchContextCmd(name string) tea.Cmd {
+func switchContextCmd(name, kubeconfig string) tea.Cmd {
 	return func() tea.Msg {
-		cl, err := k8s.NewClient(name)
+		cl, err := k8s.NewClient(name, kubeconfig)
 		return clientReadyMsg{client: cl, err: err}
 	}
 }

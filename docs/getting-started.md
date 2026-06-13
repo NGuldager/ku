@@ -26,6 +26,7 @@ kli --version
 | Flag | Description |
 | --- | --- |
 | `--context` | kubeconfig context to use (default: current-context) |
+| `--kubeconfig` | path to the kubeconfig file (default: `$KUBECONFIG`, then `~/.kube/config`) |
 | `-n`, `--namespace` | initial namespace (empty means all namespaces) |
 | `--resource` | initial resource, e.g. `pods`, `deploy`, `svc` |
 | `--theme` | `ansi` (default) or `tokyonight` |

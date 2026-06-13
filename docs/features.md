@@ -34,11 +34,13 @@ stripped), with theme-aware syntax highlighting. `g` / `G` jump to top and
 bottom. Secret `data` is base64-decoded here for readability; editing a Secret
 still fetches raw base64 so saves stay valid.
 
-## Node stats
+## Live resource usage
 
-On the nodes view, kli appends live CPU and memory usage and percentages from
-the metrics API, the same numbers as `kubectl top nodes`. This is best-effort:
-if metrics-server is not installed, the columns are simply omitted.
+On the nodes view, kli appends live CPU and memory usage with percentages from
+the metrics API, the same numbers as `kubectl top nodes`. On the pods view it
+appends per-pod CPU and memory (summed across containers), like `kubectl top
+pods`. Both are best-effort: if metrics-server is not installed, the columns are
+simply omitted.
 
 ## Edit, applied on save
 

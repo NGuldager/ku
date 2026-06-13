@@ -66,7 +66,7 @@ func mkKey(s string) tea.KeyMsg {
 // panic and non-empty output. It needs a reachable cluster only for the client
 // catalog; skipped otherwise.
 func TestAppSmoke(t *testing.T) {
-	cl, err := k8s.NewClient("")
+	cl, err := k8s.NewClient("", "")
 	if err != nil {
 		t.Skipf("no cluster available: %v", err)
 	}

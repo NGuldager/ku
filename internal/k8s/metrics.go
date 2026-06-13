@@ -57,6 +57,79 @@ func (c *Client) AppendNodeStats(ctx context.Context, t *Table) error {
 	return nil
 }
 
+// AppendPodStats augments a pods table with live CPU and memory usage (summed
+// across containers) from the metrics API. Best-effort: returns an error and
+// leaves the table unchanged when metrics are unavailable. namespace is "" to
+// match an all-namespaces listing.
+func (c *Client) AppendPodStats(ctx context.Context, t *Table, namespace string) error {
+	usage, err := c.podUsage(ctx, namespace)
+	if err != nil {
+		return err
+	}
+	if len(usage) == 0 {
+		return fmt.Errorf("no pod metrics")
+	}
+	t.Columns = append(t.Columns, Column{Name: "CPU"}, Column{Name: "MEM"})
+	for i := range t.Rows {
+		u, ok := usage[t.Rows[i].Namespace+"/"+t.Rows[i].Name]
+		if !ok {
+			t.Rows[i].Cells = append(t.Rows[i].Cells, "-", "-")
+			continue
+		}
+		t.Rows[i].Cells = append(t.Rows[i].Cells,
+			fmt.Sprintf("%dm", u.cpuMilli),
+			fmt.Sprintf("%dMi", u.memBytes/(1024*1024)))
+	}
+	return nil
+}
+
+func (c *Client) podUsage(ctx context.Context, namespace string) (map[string]nodeUsage, error) {
+	gv := schema.GroupVersion{Group: "metrics.k8s.io", Version: "v1beta1"}
+	rc, err := c.restClientFor(gv)
+	if err != nil {
+		return nil, err
+	}
+	req := rc.Get().Resource("pods")
+	if namespace != "" {
+		req = req.Namespace(namespace)
+	}
+	raw, err := req.Do(ctx).Raw()
+	if err != nil {
+		return nil, err
+	}
+	var list struct {
+		Items []struct {
+			Metadata struct {
+				Name      string `json:"name"`
+				Namespace string `json:"namespace"`
+			} `json:"metadata"`
+			Containers []struct {
+				Usage struct {
+					CPU    string `json:"cpu"`
+					Memory string `json:"memory"`
+				} `json:"usage"`
+			} `json:"containers"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return nil, err
+	}
+	out := make(map[string]nodeUsage, len(list.Items))
+	for _, it := range list.Items {
+		var u nodeUsage
+		for _, ct := range it.Containers {
+			if q, err := resource.ParseQuantity(ct.Usage.CPU); err == nil {
+				u.cpuMilli += q.MilliValue()
+			}
+			if q, err := resource.ParseQuantity(ct.Usage.Memory); err == nil {
+				u.memBytes += q.Value()
+			}
+		}
+		out[it.Metadata.Namespace+"/"+it.Metadata.Name] = u
+	}
+	return out, nil
+}
+
 func (c *Client) nodeUsage(ctx context.Context) (map[string]nodeUsage, error) {
 	gv := schema.GroupVersion{Group: "metrics.k8s.io", Version: "v1beta1"}
 	rc, err := c.restClientFor(gv)
