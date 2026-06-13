@@ -76,7 +76,7 @@ func renderConfig(th Theme, res k8s.ResourceInfo, obj map[string]interface{}, wi
 		}
 		lines = append(lines, ansi.Truncate(th.ModalTitle.Render(title), width, ""))
 		for _, r := range rows {
-			lines = append(lines, ansi.Truncate(configKV(th, r.key, r.value), width, ""))
+			lines = append(lines, configKV(th, r.key, r.value, width))
 		}
 	}
 
@@ -114,11 +114,24 @@ func renderConfig(th Theme, res k8s.ResourceInfo, obj map[string]interface{}, wi
 	return strings.Join(lines, "\n")
 }
 
-func configKV(th Theme, key, value string) string {
+func configKV(th Theme, key, value string, width int) string {
 	if strings.TrimSpace(value) == "" {
 		value = th.Dim.Render("-")
 	}
-	return th.HeaderKey.Render(fmt.Sprintf("  %-*s", configKeyWidth, key)) + value
+	valueW := ansi.StringWidth(value)
+	keyW := configKeyWidth
+	if width > 0 {
+		maxKeyW := width - valueW - 4 // indent + two-space separator
+		if maxKeyW < 6 {
+			maxKeyW = 6
+		}
+		if keyW > maxKeyW {
+			keyW = maxKeyW
+		}
+	}
+	key = truncate(key, keyW)
+	line := th.HeaderKey.Render(fmt.Sprintf("  %-*s", keyW, key)) + "  " + value
+	return ansi.Truncate(line, width, "")
 }
 
 func overviewRows(res k8s.ResourceInfo, obj map[string]interface{}) []configRow {
