@@ -21,9 +21,13 @@ NAMESPACE column.
 ## Describe and YAML
 
 `Enter` or `d` opens the object's YAML in a scrollable view (managed fields
-stripped). `g` / `G` jump to top and bottom. Secret `data` is base64-decoded
-here for readability; editing a Secret still fetches raw base64 so saves stay
-valid.
+stripped), with theme-aware syntax highlighting. `g` / `G` jump to top and
+bottom. Secret `data` is base64-decoded here for readability; editing a Secret
+still fetches raw base64 so saves stay valid.
+
+Press `|` to filter the YAML through `yq` (e.g. `.spec.containers[].image`); an
+empty expression resets to the full document. This needs `yq` on your PATH and
+is skipped with a message otherwise.
 
 ## Node stats
 
@@ -33,8 +37,8 @@ if metrics-server is not installed, the columns are simply omitted.
 
 ## Edit, applied on save
 
-`e` opens the object in `$EDITOR` (nvim, falling back to `vi`) in an overlay
-inside the TUI. Save and quit to apply the change as an optimistic update; the
+`e` opens the object in your editor (`$EDITOR`, then `$VISUAL`, then whatever is
+installed: nvim, vim, nano, or vi) in an overlay inside the TUI. Save and quit to apply the change as an optimistic update; the
 editor's cursor is rendered in the panel. If you make no changes, nothing is
 sent. `Ctrl+\` cancels without applying. kli rejects edits that change the
 object's kind or name.

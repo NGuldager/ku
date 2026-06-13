@@ -237,9 +237,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.res.Key() == a.detailTarget.res.Key() &&
 			m.ns == a.detailTarget.ns && m.name == a.detailTarget.name {
 			if m.err != nil {
-				a.detail.setContent(m.title, "Error: "+m.err.Error())
+				a.detail.setMessage(m.title, "Error: "+m.err.Error())
 			} else {
-				a.detail.setContent(m.title, m.yaml)
+				a.detail.setYAML(m.title, m.yaml)
 			}
 		}
 		return a, nil
@@ -495,6 +495,10 @@ func (a App) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case key.Matches(msg, a.keys.Edit):
 		return a.editTarget(a.detailTarget)
+	case msg.String() == "|":
+		a.sel.open(selYqFilter, "yq filter", "e.g. .spec.containers[].image (empty resets)", nil, true)
+		a.overlay = overlaySelector
+		return a, nil
 	case key.Matches(msg, a.keys.Top):
 		a.detail.vp.GotoTop()
 		return a, nil
@@ -622,7 +626,7 @@ func (a App) openDetail() (tea.Model, tea.Cmd) {
 	}
 	a.detailTarget = target{res: a.res, ns: row.Namespace, name: row.Name}
 	a.screen = screenDetail
-	a.detail.setContent(row.Name, "loading…")
+	a.detail.setMessage(row.Name, "loading…")
 	return a, loadDetailCmd(a.client, a.res, row.Namespace, row.Name)
 }
 
@@ -1088,6 +1092,19 @@ func (a App) applySelection(res selResult) (tea.Model, tea.Cmd) {
 		}
 		t := a.scaleTarget
 		return a, scaleCmd(a.client, t.res, t.ns, t.name, n)
+	case selYqFilter:
+		expr := strings.TrimSpace(res.value)
+		if expr == "" || expr == "." {
+			a.detail.setFiltered(a.detail.raw)
+			return a, nil
+		}
+		out, err := runYq(expr, a.detail.raw)
+		if err != nil {
+			a.setStatus("yq: "+trimErr(err), true)
+			return a, nil
+		}
+		a.detail.setFiltered(out)
+		return a, nil
 	}
 	return a, nil
 }
@@ -1302,7 +1319,7 @@ func (a App) hints() []hint {
 	}
 	switch a.screen {
 	case screenDetail:
-		return []hint{{"↑↓", "scroll"}, {"e", "edit"}, {"esc", "back"}}
+		return []hint{{"↑↓", "scroll"}, {"e", "edit"}, {"|", "yq"}, {"esc", "back"}}
 	case screenLogs:
 		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"esc", "back"}}
 	}

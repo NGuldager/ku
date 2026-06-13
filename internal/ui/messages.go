@@ -1,7 +1,10 @@
 package ui
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -224,18 +227,46 @@ func tickCmd() tea.Cmd {
 	return tea.Tick(refreshInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-// editorCommand returns the program and args to open path, honoring $EDITOR
-// (which may include flags), falling back to nvim then vi.
+// editorCommand returns the program and args to open path. It honors $EDITOR
+// then $VISUAL (which may include flags), then falls back to whatever is
+// installed, preferring nvim, then vim, nano, and finally vi.
 func editorCommand(path string) (string, []string) {
 	ed := strings.TrimSpace(os.Getenv("EDITOR"))
 	if ed == "" {
-		if _, err := exec.LookPath("nvim"); err == nil {
-			ed = "nvim"
-		} else {
-			ed = "vi"
+		ed = strings.TrimSpace(os.Getenv("VISUAL"))
+	}
+	if ed == "" {
+		for _, cand := range []string{"nvim", "vim", "nano", "vi"} {
+			if _, err := exec.LookPath(cand); err == nil {
+				ed = cand
+				break
+			}
 		}
+	}
+	if ed == "" {
+		ed = "vi"
 	}
 	fields := strings.Fields(ed)
 	args := append(fields[1:], path)
 	return fields[0], args
+}
+
+// runYq pipes input through `yq eval <expr>`, used to filter the YAML shown in
+// the detail view. Returns a clear error if yq is not installed.
+func runYq(expr, input string) (string, error) {
+	if _, err := exec.LookPath("yq"); err != nil {
+		return "", fmt.Errorf("yq is not installed")
+	}
+	cmd := exec.Command("yq", "eval", expr, "-")
+	cmd.Stdin = strings.NewReader(input)
+	var out, errb bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errb
+	if err := cmd.Run(); err != nil {
+		if msg := strings.TrimSpace(errb.String()); msg != "" {
+			return "", errors.New(msg)
+		}
+		return "", err
+	}
+	return out.String(), nil
 }

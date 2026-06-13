@@ -8,11 +8,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// detailView shows a single object's YAML in a scrollable viewport.
+// detailView shows a single object's YAML in a scrollable viewport with
+// theme-aware syntax highlighting. It keeps the raw YAML so it can re-render or
+// apply a yq filter.
 type detailView struct {
 	th    Theme
 	vp    viewport.Model
 	title string
+	raw   string // original YAML, for re-highlight and yq filtering
 	ready bool
 }
 
@@ -28,11 +31,28 @@ func (d *detailView) setSize(w, h int) {
 	d.vp.Height = h - 1 // leave a row for the title
 }
 
-func (d *detailView) setContent(title, body string) {
+// setMessage shows plain (unhighlighted) text such as "loading…" or an error.
+func (d *detailView) setMessage(title, body string) {
 	d.title = title
+	d.raw = ""
 	d.vp.SetContent(body)
 	d.vp.GotoTop()
 	d.ready = true
+}
+
+// setYAML stores and renders highlighted YAML.
+func (d *detailView) setYAML(title, yaml string) {
+	d.title = title
+	d.raw = yaml
+	d.vp.SetContent(highlightYAML(yaml, d.th))
+	d.vp.GotoTop()
+	d.ready = true
+}
+
+// setFiltered renders a yq-filtered result without discarding the raw YAML.
+func (d *detailView) setFiltered(yaml string) {
+	d.vp.SetContent(highlightYAML(yaml, d.th))
+	d.vp.GotoTop()
 }
 
 func (d detailView) Update(msg tea.Msg) (detailView, tea.Cmd) {

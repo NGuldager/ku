@@ -81,7 +81,7 @@ func TestAppSmoke(t *testing.T) {
 			// Force the detail and logs screens directly.
 			a = m.(App)
 			a.screen = screenDetail
-			a.detail.setContent("default/api-7d9", "apiVersion: v1\nkind: Pod\n")
+			a.detail.setYAML("default/api-7d9", "apiVersion: v1\nkind: Pod\nmetadata:\n  name: api-7d9\n")
 			mustRender(t, a, themeName, size)
 
 			a.screen = screenLogs
