@@ -31,21 +31,17 @@ type SidebarItem struct {
 	Resource string `yaml:"resource"`
 }
 
-func kliConfigDir() (string, error) {
+func kliConfigFile(name string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "kli"), nil
+	return filepath.Join(home, ".config", "kli", name), nil
 }
 
 // configPath is ~/.config/kli/config.yaml.
 func configPath() (string, error) {
-	dir, err := kliConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "config.yaml"), nil
+	return kliConfigFile("config.yaml")
 }
 
 // ConfigPath exposes the resolved config file path for the `kli config path`
