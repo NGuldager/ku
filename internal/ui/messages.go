@@ -177,6 +177,7 @@ func loadConfigCmd(cl *k8s.Client, seq int, res k8s.ResourceInfo, ns, name strin
 }
 
 type nodeDebugReadyMsg struct {
+	client    *k8s.Client
 	ns        string
 	pod       string
 	container string
@@ -191,7 +192,7 @@ func createNodeDebugCmd(cl *k8s.Client, ns, node string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 		pod, container, err := cl.CreateNodeDebugPod(ctx, ns, node)
-		return nodeDebugReadyMsg{ns: ns, pod: pod, container: container, node: node, err: err}
+		return nodeDebugReadyMsg{client: cl, ns: ns, pod: pod, container: container, node: node, err: err}
 	}
 }
 

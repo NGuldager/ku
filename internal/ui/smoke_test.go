@@ -217,6 +217,30 @@ func TestIgnoresStaleLoadResults(t *testing.T) {
 	}
 }
 
+func TestStaleNodeDebugReadySchedulesCleanup(t *testing.T) {
+	current := &k8s.Client{}
+	stale := &k8s.Client{}
+	app := App{client: current, theme: PickTheme("ansi")}
+
+	model, cmd := app.Update(nodeDebugReadyMsg{
+		client:    stale,
+		ns:        "default",
+		pod:       "kli-node-debug-abc",
+		container: "debug",
+		node:      "node-a",
+	})
+	got := model.(App)
+	if cmd == nil {
+		t.Fatal("stale node debug ready did not return cleanup command")
+	}
+	if got.overlay == overlayTerm {
+		t.Fatal("stale node debug opened terminal overlay")
+	}
+	if got.status != "node shell cancelled after context switch" || got.statusErr {
+		t.Fatalf("status = %q err=%t, want cancellation notice", got.status, got.statusErr)
+	}
+}
+
 func mustRender(t *testing.T, m tea.Model, theme string, size [2]int) {
 	t.Helper()
 	defer func() {

@@ -330,6 +330,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.handleContainers(m)
 
 	case nodeDebugReadyMsg:
+		if m.client != a.client {
+			if m.pod != "" {
+				a.setStatus("node shell cancelled after context switch", false)
+				return a, deletePodCmd(m.client, m.ns, m.pod)
+			}
+			return a, nil
+		}
 		if m.err != nil {
 			a.setStatus("node shell: "+trimErr(m.err), true)
 			return a, nil
@@ -1077,8 +1084,8 @@ func (a App) openNodeShell() (tea.Model, tea.Cmd) {
 // startNodeExec opens the terminal in the node debug pod and deletes the pod
 // when the session ends.
 func (a App) startNodeExec(m nodeDebugReadyMsg) (tea.Model, tea.Cmd) {
-	cleanup := deletePodCmd(a.client, m.ns, m.pod)
-	return a.startExec(m.ns, m.pod, m.container, "node "+m.node, k8s.NodeShellCommand, cleanup)
+	cleanup := deletePodCmd(m.client, m.ns, m.pod)
+	return a.startExec(m.client, m.ns, m.pod, m.container, "node "+m.node, k8s.NodeShellCommand, cleanup)
 }
 
 func (a App) handleContainers(m containersMsg) (tea.Model, tea.Cmd) {
@@ -1099,7 +1106,7 @@ func (a App) handleContainers(m containersMsg) (tea.Model, tea.Cmd) {
 	}
 	if len(m.names) == 1 {
 		if m.forExec {
-			return a.startExec(m.ns, m.pod, m.names[0], "", nil, nil)
+			return a.startExec(a.client, m.ns, m.pod, m.names[0], "", nil, nil)
 		}
 		return a.startLogs(m.ns, m.pod, m.names[0])
 	}
@@ -1187,7 +1194,10 @@ func (a App) startDeploymentLogs(ns, deployment string, targets []k8s.LogTarget)
 // startExec opens the embedded-terminal overlay running command (nil = default
 // shell) in a pod container. title labels the panel; onClose, if set, runs when
 // the session ends (e.g. to delete a debug pod).
-func (a App) startExec(ns, pod, container, title string, command []string, onClose tea.Cmd) (tea.Model, tea.Cmd) {
+func (a App) startExec(cl *k8s.Client, ns, pod, container, title string, command []string, onClose tea.Cmd) (tea.Model, tea.Cmd) {
+	if cl == nil {
+		cl = a.client
+	}
 	a.term.stop()
 	a.termSession++
 	sess := a.termSession
@@ -1217,7 +1227,6 @@ func (a App) startExec(ns, pod, container, title string, command []string, onClo
 	a.term = t
 	a.overlay = overlayTerm
 
-	cl := a.client
 	go runTermInput(ctx, em, input)
 	go func() {
 		err := cl.ExecStream(ctx, ns, pod, container, command, em, em, q)
@@ -1611,7 +1620,7 @@ func (a App) applySelection(res selResult) (tea.Model, tea.Cmd) {
 	case selContainer:
 		return a.startLogs(a.logTarget.ns, a.logTarget.name, res.id)
 	case selExecContainer:
-		return a.startExec(a.execTarget.ns, a.execTarget.name, res.id, "", nil, nil)
+		return a.startExec(a.client, a.execTarget.ns, a.execTarget.name, res.id, "", nil, nil)
 	case selScale:
 		n, err := strconv.Atoi(strings.TrimSpace(res.value))
 		if err != nil || n < 0 {

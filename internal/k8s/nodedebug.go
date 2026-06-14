@@ -66,8 +66,13 @@ func (c *Client) CreateNodeDebugPod(ctx context.Context, namespace, nodeName str
 		return "", "", err
 	}
 	if err := c.waitPodRunning(ctx, namespace, created.Name); err != nil {
-		// Best-effort cleanup if it never became usable.
-		_ = c.DeletePod(context.Background(), namespace, created.Name)
+		// Best-effort cleanup if it never became usable. Use a fresh bounded
+		// context because ctx is often already cancelled here.
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if cleanupErr := c.DeletePod(cleanupCtx, namespace, created.Name); cleanupErr != nil {
+			return "", "", fmt.Errorf("%w; cleanup debug pod: %v", err, cleanupErr)
+		}
 		return "", "", err
 	}
 	return created.Name, "debug", nil
