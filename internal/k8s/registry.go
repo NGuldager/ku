@@ -124,6 +124,10 @@ func (c *Client) loadRegistry() error {
 		return reg.all[i].Resource < reg.all[j].Resource
 	})
 
+	if err != nil && len(reg.all) == 0 {
+		return err
+	}
+
 	c.registry = reg
 	return err
 }
