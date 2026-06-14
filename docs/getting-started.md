@@ -2,12 +2,27 @@
 
 ## Install
 
-```
-go build -o kli .       # local binary
-make install            # builds and installs to ~/.local/bin
+Install the latest release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bjarneo/kli/main/install.sh | sh
 ```
 
-Requires Go 1.24+ and access to a cluster. kli reads your default kubeconfig.
+Or install with Go:
+
+```bash
+go install github.com/bjarneo/kli@latest
+```
+
+Or build from a clone:
+
+```
+make install            # builds and installs to a bin dir on PATH
+go build -o kli .       # local binary only
+```
+
+Building from source requires Go 1.26.3+. Running kli requires access to a
+cluster. kli reads your default kubeconfig.
 
 ## Run
 
@@ -21,17 +36,31 @@ kli --check               # read-only connectivity check, no UI
 kli --version
 ```
 
+## Commands
+
+| Command | Description |
+| --- | --- |
+| `kli` | start the TUI |
+| `kli config init` | write a starter config file with the built-in sidebar defaults |
+| `kli config init --force` | overwrite the config file with the current defaults |
+| `kli config path` | print the config file location |
+| `kli upgrade` | download the latest release binary and replace the current binary |
+
 ## Flags
 
 | Flag | Description |
 | --- | --- |
 | `--context` | kubeconfig context to use (default: current-context) |
 | `--kubeconfig` | path to the kubeconfig file (default: `$KUBECONFIG`, then `~/.kube/config`) |
-| `-n`, `--namespace` | initial namespace (empty means all namespaces) |
+| `-n`, `--namespace` | initial namespace; omit to use the remembered or context namespace |
 | `--resource` | initial resource, e.g. `pods`, `deploy`, `svc` |
 | `--theme` | `ansi` (default) or `tokyonight` |
 | `--check` | run a read-only connectivity check and exit |
 | `--version` | print version and exit |
+
+`--resource` accepts the same names as the in-app resource picker: plural,
+singular, kind, short name, or group-qualified key such as
+`scaledobjects.keda.sh`.
 
 ## Layout
 
@@ -39,8 +68,8 @@ kli opens on the cockpit, a cluster overview (health, node CPU/memory, pods,
 deployments, and recent warnings). From there:
 
 - A left nav lists Overview plus common resource kinds, grouped by category.
-- The main area shows the cockpit or, once you pick a resource, its table,
-  server-rendered with the same columns as `kubectl get`.
+- The main area shows the cockpit or, once you pick a resource, its table with
+  the same server-rendered columns as `kubectl get`.
 - A status bar always shows the keys available right now, with the creator
   handle in the bottom-right.
 
@@ -54,8 +83,38 @@ The default theme uses your terminal's own ANSI palette and adapts to a light or
 dark background, so it matches whatever scheme you already run. For a fixed,
 high-contrast look, pass `--theme tokyonight` or set `KLI_THEME=tokyonight`.
 
+## Configuration
+
+kli reads an optional config file from `~/.config/kli/config.yaml`. The running
+TUI reads it once at startup and never writes it. Use `kli config init` to seed a
+starter file, then edit it yourself.
+
+Today the config customizes the left sidebar menu. If a `sidebar:` list is
+present, it replaces the built-in default menu. The Overview entry is always
+available, resources the cluster does not expose are dropped, and empty sections
+are hidden.
+
+```yaml
+sidebar:
+  - section: Workloads
+    items:
+      - { label: Pods, resource: pods }
+      - { label: Deployments, resource: deployments }
+      - { label: HPAs, resource: horizontalpodautoscalers }
+      - { label: ScaledObjects, resource: scaledobjects }
+  - section: Network
+    items:
+      - { label: Services, resource: services }
+```
+
+The built-in default sidebar includes Pods, Deployments, StatefulSets,
+DaemonSets, ReplicaSets, Jobs, CronJobs, Services, Ingresses, Endpoints,
+ConfigMaps, Secrets, ServiceAccounts, PVCs, PVs, StorageClasses, Nodes,
+Namespaces, and Events. HPAs, KEDA ScaledObjects, and OpenTelemetry collectors
+are opt-in examples in a seeded config file.
+
 ## Session memory
 
 kli remembers the last context and namespace you used and restores them on the
 next launch. Flags override the remembered values. State is written to
-`$XDG_CONFIG_HOME/kli/state.json` (or the OS-default config dir).
+`~/.config/kli/state.json`.

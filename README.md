@@ -27,7 +27,8 @@ make install   # builds and installs to ~/.local/bin, /usr/local/bin, or your la
 go build -o kli .
 ```
 
-Requires Go 1.24+ and a reachable cluster.
+Building from source requires Go 1.26.3+. Running kli requires a reachable
+cluster.
 
 ## Quick start
 
@@ -36,6 +37,7 @@ kli                       # current context, remembered namespace
 kli -n kube-system        # start in a namespace
 kli --resource deploy     # start on a resource type
 kli --theme tokyonight    # switch theme
+kli upgrade               # replace the current binary with the latest release
 ```
 
 Press `?` for help and `Ctrl+K` for the command palette.
@@ -57,6 +59,7 @@ Seed a starter file with the current defaults (refuses to overwrite without
 
 ```
 kli config init          # write the default config to populate from
+kli config init --force  # overwrite an existing config with the defaults
 kli config path          # print the config file location
 ```
 
@@ -84,9 +87,10 @@ them as above (a freshly seeded config lists them as commented examples).
 - A cockpit overview on launch: cluster health, node CPU and memory gauges, pod and deployment status, and recent warnings.
 - Server-rendered tables for any resource, the same columns as `kubectl get`, including CRDs.
 - lazygit-style layout: a left resource nav, `Tab` between panes, and a status bar that always shows the keys that work right now.
-- Logs, edit-in-editor (applied on save), shell into a pod, delete, and scale, all in overlays inside the TUI.
+- Config summaries, raw YAML, logs, edit-in-editor, shell into pods or nodes, delete, scale, restart, and CronJob trigger, all inside the TUI.
 - ANSI colors that match your terminal in light or dark mode, with Tokyo Night as a fallback (`--theme tokyonight`).
 - A customizable sidebar menu via an optional config file (`kli config init`): add CRDs like HPAs, KEDA ScaledObjects, or OpenTelemetry collectors.
+- `C` shows the equivalent `kubectl` command, and `O` opens upstream Kubernetes docs for known resources.
 - Remembers your last context and namespace.
 
 ## Docs

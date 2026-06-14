@@ -8,8 +8,8 @@ MemoryPressure, NotReady, ...), live CPU and memory gauges (from the metrics
 API), pod counts by phase plus how many are not-ready or crashlooping,
 deployment readiness, and recent warning events (deduplicated, with a recurrence
 count). It refreshes every few seconds. Reach it any time from the Overview
-entry at the top of the nav, and press Enter on a resource (or `:` / `Ctrl+K`)
-to drill in.
+entry at the top of the nav, and press Enter on a nav resource (or `:` /
+`Ctrl+K`) to drill in.
 
 ## Any resource, real columns
 
@@ -20,7 +20,8 @@ names like `po`, `deploy`, `svc`) at startup. If discovery is partial (an
 aggregated API is down), kli warns instead of silently hiding kinds.
 
 Jump anywhere with `:` (type a name or alias) or the `Ctrl+K` palette. The left
-nav lists common kinds for quick access.
+nav lists common kinds for quick access, and `O` opens upstream Kubernetes docs
+for known built-in resources.
 
 ## Live tables
 
@@ -37,18 +38,27 @@ like age and IP is dimmed so names and problems stand out. The selected row is a
 single highlight bar.
 
 `S` sorts by a column: it opens a picker of the current columns, and re-picking
-the active column flips direction (a `▲`/`▼` marks the sorted column header).
+the active column flips direction (the sorted column header shows the direction).
 Sorting is type-aware, so AGE sorts by duration, CPU/MEM and percentages sort
 numerically, and names sort case-insensitively. Numeric columns default to
 descending (largest/oldest first). Sorting composes with the `/` filter and
 resets when you switch resources.
 
-## Describe and YAML
+`C` shows the closest equivalent `kubectl` command for the current view: table,
+cockpit, YAML detail, config summary, or logs.
 
-`Enter` or `d` opens the object's YAML in a scrollable view (managed fields
+## Config summary and YAML
+
+`Enter` opens a curated config summary for the selected object. Pods show live
+usage when metrics are available, health, requests and limits, and pod spec
+details. Workloads, Jobs, and CronJobs show status before overview fields.
+Services, Ingresses, ConfigMaps, and Secrets get purpose-built summaries;
+unknown kinds fall back to an overview plus spec summary.
+
+`d` or `y` opens the object's YAML in a scrollable view (managed fields
 stripped), with theme-aware syntax highlighting. `g` / `G` jump to top and
-bottom. Secret `data` is base64-decoded here for readability; editing a Secret
-still fetches raw base64 so saves stay valid.
+bottom. Secret `data` is base64-decoded in read-only views for readability;
+editing a Secret still fetches raw base64 so saves stay valid.
 
 ## Live resource usage
 
@@ -58,19 +68,19 @@ appends per-pod CPU and memory (summed across containers), like `kubectl top
 pods`. Both are best-effort: if metrics-server is not installed, the columns are
 simply omitted.
 
-## Edit, applied on save
+## Edit, apply after confirm
 
 `e` opens the object in your editor (`$EDITOR`, then `$VISUAL`, then whatever is
-installed: nvim, vim, nano, or vi) in an overlay inside the TUI. Save and quit to apply the change as an optimistic update; the
-editor's cursor is rendered in the panel. If you make no changes, nothing is
-sent. `Ctrl+\` cancels without applying. kli rejects edits that change the
-object's kind or name.
+installed: nvim, vim, nano, or vi) in an overlay inside the TUI. Save and quit,
+then confirm the apply. If you make no changes, nothing is sent. `Ctrl+\`
+cancels without applying. kli rejects edits that change the object's kind or
+name.
 
 ## Logs
 
-`l` on a pod streams logs live in an overlay (it prompts for the container when
-there are several). `f` toggles auto-scroll so you can read back through
-history; `g` / `G` jump to top and bottom.
+`l` on a pod streams logs live in an overlay, starting with the last 1000 lines
+(it prompts for the container when there are several). `f` toggles auto-scroll
+so you can read back through history; `g` / `G` jump to top and bottom.
 
 ## Shell into a pod or node
 
@@ -86,18 +96,21 @@ deleted when you exit or detach. Override the image with `$KLI_DEBUG_IMAGE`
 (default `busybox`). This needs permission to create privileged pods, so it may
 be blocked on clusters with restrictive Pod Security settings.
 
-## Scale, restart, delete
+## Scale, restart, trigger, delete
 
 `s` on a workload (deployment, statefulset, replicaset) prompts for a replica
 count. `R` triggers a rolling restart of a deployment, statefulset, or daemonset
-(the same restartedAt-annotation mechanism kubectl uses), after a confirm. `x`
+(the same restartedAt-annotation mechanism kubectl uses), after a confirm. `t`
+on a CronJob creates a one-off Job from its job template, after a confirm. `x`
 deletes the selected object after a confirm.
 
 The bottom bar is context-aware: it shows logs and shell for pods, scale and
-restart for workloads, so the relevant actions are always in view.
+restart for workloads, and trigger for CronJobs, so the relevant actions are
+always in view.
 
 ## Namespaces and contexts
 
 `n` picks a namespace, `a` toggles all-namespaces, and `c` switches context.
 Switching context rebuilds the client, the resource catalog, and the left nav.
-Your last context and namespace are remembered for next launch.
+Your last context and namespace are remembered in `~/.config/kli/state.json` for
+next launch.
