@@ -63,6 +63,9 @@ func NewClient(contextOverride, kubeconfigPath string) (*Client, error) {
 	if restCfg.UserAgent == "" {
 		restCfg.UserAgent = "kli"
 	}
+	// API warning headers are useful in logs but corrupt the terminal UI when the
+	// default client-go handler writes them directly to stderr.
+	restCfg.WarningHandlerWithContext = rest.NoWarnings{}
 
 	ns, _, err := cc.Namespace()
 	if err != nil {
