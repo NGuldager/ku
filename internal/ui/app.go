@@ -580,6 +580,9 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if !(a.screen == screenTable && a.table.filtering) && key.Matches(msg, a.keys.Command) {
 		return a.openCommand()
 	}
+	if !(a.screen == screenTable && a.table.filtering) && key.Matches(msg, a.keys.Docs) {
+		return a.openDocs()
+	}
 
 	switch a.screen {
 	case screenConfig:
@@ -1424,6 +1427,7 @@ func (a App) openPalette() (tea.Model, tea.Cmd) {
 	}
 
 	items = append(items,
+		selItem{title: "Open Kubernetes docs", desc: "O", id: "cmd:docs"},
 		selItem{title: "Jump to resource", desc: ":", id: "cmd:jump"},
 		selItem{title: "Filter list", desc: "/", id: "cmd:filter"},
 		selItem{title: "Show kubectl command", desc: "C", id: "cmd:kubectl"},
@@ -1554,6 +1558,8 @@ func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
 		return a, nil
 	case "cmd:kubectl":
 		return a.openCommand()
+	case "cmd:docs":
+		return a.openDocs()
 	case "cmd:refresh":
 		if a.screen == screenCockpit {
 			return a.reloadCockpit()
@@ -1795,15 +1801,15 @@ func (a App) hints() []hint {
 		if a.configTarget.res.IsCronJob() {
 			h = append(h, hint{"t", "trigger"})
 		}
-		return append(h, hint{"e", "edit"}, hint{"C", "cmd"}, hint{"esc", "back"})
+		return append(h, hint{"e", "edit"}, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenDetail:
 		h := []hint{{"↑↓", "scroll"}, {"enter", "config"}}
 		if a.detailTarget.res.IsCronJob() {
 			h = append(h, hint{"t", "trigger"})
 		}
-		return append(h, hint{"e", "edit"}, hint{"C", "cmd"}, hint{"esc", "back"})
+		return append(h, hint{"e", "edit"}, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenLogs:
-		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"C", "cmd"}, {"esc", "back"}}
+		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"O", "docs"}, {"C", "cmd"}, {"esc", "back"}}
 	case screenCockpit:
 		if a.focus == focusSidebar {
 			return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"C", "cmd"}, {"?", "help"}}
@@ -1831,7 +1837,7 @@ func (a App) hints() []hint {
 		h = append(h, hint{"t", "trigger"})
 	}
 	h = append(h,
-		hint{"e", "edit"}, hint{"x", "del"}, hint{"/", "filter"}, hint{"S", "sort"}, hint{"C", "cmd"},
+		hint{"e", "edit"}, hint{"x", "del"}, hint{"/", "filter"}, hint{"S", "sort"}, hint{"O", "docs"}, hint{"C", "cmd"},
 		hint{"tab", "nav"}, hint{"^k", "palette"}, hint{"?", "help"}, hint{"q", "quit"})
 	if a.table.filterActive() {
 		h = append([]hint{{"esc", "clear filter"}}, h...)

@@ -25,6 +25,7 @@ type keyMap struct {
 	Restart  key.Binding
 	Trigger  key.Binding
 	Delete   key.Binding
+	Docs     key.Binding
 
 	// views / navigation
 	Focus     key.Binding
@@ -68,6 +69,7 @@ func defaultKeys() keyMap {
 		Restart:  key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "rollout restart")),
 		Trigger:  key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "trigger job")),
 		Delete:   key.NewBinding(key.WithKeys("x", "delete"), key.WithHelp("x", "delete")),
+		Docs:     key.NewBinding(key.WithKeys("O"), key.WithHelp("O", "open docs")),
 
 		Focus:     key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab ←→", "switch pane")),
 		Filter:    key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
@@ -98,7 +100,7 @@ type helpGroup struct {
 func (k keyMap) groups() []helpGroup {
 	return []helpGroup{
 		{"Navigation", []key.Binding{k.Up, k.Down, k.HalfUp, k.HalfDown, k.PageUp, k.PageDown, k.Top, k.Bottom}},
-		{"Actions", []key.Binding{k.Enter, k.Describe, k.YAML, k.Logs, k.Edit, k.Shell, k.Restart, k.Trigger, k.Delete}},
+		{"Actions", []key.Binding{k.Enter, k.Describe, k.YAML, k.Logs, k.Edit, k.Shell, k.Restart, k.Trigger, k.Delete, k.Docs}},
 		{"Views", []key.Binding{k.Focus, k.Jump, k.Palette, k.Filter, k.Sort, k.Refresh, k.Wide, k.Command}},
 		{"Cluster", []key.Binding{k.Namespace, k.AllNS, k.Context}},
 		{"Logs", []key.Binding{k.Follow}},
