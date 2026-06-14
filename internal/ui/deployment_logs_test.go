@@ -85,3 +85,17 @@ func TestDeploymentLogDoneWaitsForRemainingStreams(t *testing.T) {
 		t.Fatal("final done returned command")
 	}
 }
+
+func TestSendLogEventReleasesWait(t *testing.T) {
+	ch := make(chan logEvent, 1)
+	sendLogEvent(ch, logEvent{session: 9, done: true})
+
+	msg := waitForLog(ch)()
+	got, ok := msg.(logEvent)
+	if !ok {
+		t.Fatalf("waitForLog returned %T, want logEvent", msg)
+	}
+	if got.session != 9 || !got.done {
+		t.Fatalf("logEvent = %+v, want session 9 done", got)
+	}
+}

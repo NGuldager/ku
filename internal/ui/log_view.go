@@ -93,18 +93,12 @@ func (l logView) View() string {
 // made that event irrelevant.
 func streamLogs(ctx context.Context, cl *k8s.Client, ns, pod, cont, prefix string, session int, ch chan logEvent) {
 	defer func() {
-		select {
-		case ch <- logEvent{session: session, done: true}:
-		case <-ctx.Done():
-		}
+		sendLogEvent(ch, logEvent{session: session, done: true})
 	}()
 
 	rc, err := cl.LogStream(ctx, ns, pod, cont, logTailLines, true)
 	if err != nil {
-		select {
-		case ch <- logEvent{session: session, err: err}:
-		case <-ctx.Done():
-		}
+		sendLogEvent(ch, logEvent{session: session, err: err})
 		return
 	}
 	defer rc.Close()
@@ -123,10 +117,14 @@ func streamLogs(ctx context.Context, cl *k8s.Client, ns, pod, cont, prefix strin
 		}
 	}
 	if err := sc.Err(); err != nil && ctx.Err() == nil {
-		select {
-		case ch <- logEvent{session: session, err: err}:
-		case <-ctx.Done():
-		}
+		sendLogEvent(ch, logEvent{session: session, err: err})
+	}
+}
+
+func sendLogEvent(ch chan<- logEvent, ev logEvent) {
+	select {
+	case ch <- ev:
+	default:
 	}
 }
 
