@@ -163,8 +163,14 @@ func (c *Client) Apply(ctx context.Context, res ResourceInfo, namespace, name st
 	}
 
 	ns := namespace
-	if res.Namespaced && obj.GetNamespace() != "" {
-		ns = obj.GetNamespace()
+	if res.Namespaced {
+		objNS := obj.GetNamespace()
+		if namespace != "" && objNS != namespace {
+			return fmt.Errorf("edited namespace %q does not match %q; change rejected", objNS, namespace)
+		}
+		if ns == "" {
+			ns = objNS
+		}
 	}
 	_, err = c.resourceClient(res, ns).Update(ctx, obj, metav1.UpdateOptions{})
 	return err
