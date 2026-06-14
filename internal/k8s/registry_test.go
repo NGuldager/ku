@@ -58,3 +58,15 @@ func TestLoadRegistryKeepsPartialResources(t *testing.T) {
 		t.Fatal("partial registry cannot resolve pods")
 	}
 }
+
+func TestResolveDoesNotFallbackForQualifiedResource(t *testing.T) {
+	reg := &Registry{byKey: map[string]ResourceInfo{}}
+	reg.add(ResourceInfo{Resource: "pods", Kind: "Pod"})
+
+	if _, ok := reg.Resolve("pods"); !ok {
+		t.Fatal("Resolve(pods) failed")
+	}
+	if _, ok := reg.Resolve("pods.badgroup"); ok {
+		t.Fatal("Resolve(pods.badgroup) fell back to core pods")
+	}
+}

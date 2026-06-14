@@ -169,12 +169,6 @@ func (reg *Registry) Resolve(query string) (ResourceInfo, bool) {
 	if ri, ok := reg.byKey[q]; ok {
 		return ri, true
 	}
-	// Allow "resource.group" even if only the plural was indexed.
-	if i := strings.Index(q, "."); i > 0 {
-		if ri, ok := reg.byKey[q[:i]]; ok {
-			return ri, true
-		}
-	}
 	return ResourceInfo{}, false
 }
 
