@@ -32,11 +32,10 @@ type Table struct {
 	Rows    []Row
 }
 
-// tableAccept negotiates server-side table printing, falling back to a normal
-// list if the server cannot produce a Table for the resource.
+// tableAccept negotiates server-side table printing. Do not include plain JSON:
+// a normal list decodes into an empty metav1.Table and hides data.
 const tableAccept = "application/json;as=Table;v=v1;g=meta.k8s.io," +
-	"application/json;as=Table;v=v1beta1;g=meta.k8s.io," +
-	"application/json"
+	"application/json;as=Table;v=v1beta1;g=meta.k8s.io"
 
 // restClientFor builds a REST client bound to a specific group/version so we
 // can request the Table representation for an arbitrary resource.
@@ -75,13 +74,24 @@ func (c *Client) ListTable(ctx context.Context, res ResourceInfo, namespace stri
 		return nil, err
 	}
 
-	var mt metav1.Table
-	if err := json.Unmarshal(raw, &mt); err != nil {
-		return nil, fmt.Errorf("decode table for %s: %w", res.Resource, err)
+	mt, err := decodeTable(raw, res.Resource)
+	if err != nil {
+		return nil, err
 	}
 
 	showNS := res.Namespaced && namespace == ""
-	return convertTable(&mt, showNS), nil
+	return convertTable(mt, showNS), nil
+}
+
+func decodeTable(raw []byte, resource string) (*metav1.Table, error) {
+	var mt metav1.Table
+	if err := json.Unmarshal(raw, &mt); err != nil {
+		return nil, fmt.Errorf("decode table for %s: %w", resource, err)
+	}
+	if mt.Kind != "" && mt.Kind != "Table" {
+		return nil, fmt.Errorf("decode table for %s: server returned %s", resource, mt.Kind)
+	}
+	return &mt, nil
 }
 
 func convertTable(mt *metav1.Table, showNS bool) *Table {
