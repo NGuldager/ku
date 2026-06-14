@@ -48,9 +48,10 @@ const (
 )
 
 const (
-	headerHeight = 1
-	footerHeight = 1
-	minSidebar   = 60 // hide the sidebar below this terminal width
+	headerHeight   = 1
+	footerHeight   = 1
+	minSidebar     = 60 // hide the sidebar below this terminal width
+	mouseWheelRows = 3
 )
 
 // target identifies a single object an action operates on.
@@ -224,6 +225,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return a.handleKey(m)
 
+	case tea.MouseMsg:
+		return a.handleMouse(m)
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		a.spin, cmd = a.spin.Update(m)
@@ -380,6 +384,150 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return a.routeAux(msg)
+}
+
+// --- mouse routing ----------------------------------------------------------
+
+func (a App) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if a.overlay != overlayNone {
+		return a, nil
+	}
+	x, bodyY, ok := a.bodyMousePos(msg)
+	if !ok {
+		return a, nil
+	}
+
+	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+		return a.handleMouseWheel(x, bodyY, msg.Button)
+	}
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return a, nil
+	}
+
+	if a.sidebarVisible() {
+		if _, y, ok := a.sidebarMousePos(x, bodyY); ok {
+			a.focus = focusSidebar
+			if e, ok := a.sidebar.selectAt(y); ok {
+				return a.openNavEntry(e)
+			}
+			return a, nil
+		}
+	}
+
+	switch a.screen {
+	case screenTable:
+		return a.handleTableClick(x, bodyY)
+	case screenConfig, screenDetail, screenLogs:
+		if _, _, ok := a.fullPaneMousePos(x, bodyY); ok {
+			a.focus = focusMain
+		}
+	}
+	return a, nil
+}
+
+func (a App) bodyMousePos(msg tea.MouseMsg) (int, int, bool) {
+	x := msg.X - a.gutter
+	y := msg.Y - a.gutter
+	if x < 0 || y < headerHeight || x >= a.width || y >= a.height-footerHeight {
+		return 0, 0, false
+	}
+	return x, y - headerHeight, true
+}
+
+func (a App) paneMousePos(outerX, outerW, x, bodyY int) (int, int, bool) {
+	if outerW < 5 || a.bodyH() < 3 {
+		return 0, 0, false
+	}
+	cx := x - (outerX + 1 + panePaddingX)
+	cy := bodyY - (1 + panePaddingY)
+	if cx < 0 || cy < 0 || cx >= paneContentWidth(outerW) || cy >= paneContentHeight(a.bodyH()) {
+		return 0, 0, false
+	}
+	return cx, cy, true
+}
+
+func (a App) sidebarMousePos(x, bodyY int) (int, int, bool) {
+	return a.paneMousePos(0, a.sidebarWidth(), x, bodyY)
+}
+
+func (a App) tableMousePos(x, bodyY int) (int, int, bool) {
+	outerX, outerW := 0, a.width
+	if a.sidebarVisible() {
+		outerX = a.sidebarWidth()
+		outerW = a.width - outerX
+	}
+	return a.paneMousePos(outerX, outerW, x, bodyY)
+}
+
+func (a App) fullPaneMousePos(x, bodyY int) (int, int, bool) {
+	return a.paneMousePos(0, a.width, x, bodyY)
+}
+
+func (a App) handleTableClick(x, bodyY int) (tea.Model, tea.Cmd) {
+	if a.table.filtering {
+		return a, nil
+	}
+	cx, cy, ok := a.tableMousePos(x, bodyY)
+	if !ok {
+		return a, nil
+	}
+	a.focus = focusMain
+	if cy == 0 {
+		if ci, ok := a.table.colAt(cx); ok {
+			a.table.setSort(ci)
+		}
+		return a, nil
+	}
+	if row, ok := a.table.rowAt(cy); ok {
+		a.table.setCursor(row)
+	}
+	return a, nil
+}
+
+func (a App) handleMouseWheel(x, bodyY int, button tea.MouseButton) (tea.Model, tea.Cmd) {
+	delta := mouseWheelRows
+	if button == tea.MouseButtonWheelUp {
+		delta = -delta
+	}
+	if a.sidebarVisible() {
+		if _, _, ok := a.sidebarMousePos(x, bodyY); ok {
+			a.focus = focusSidebar
+			a.sidebar.move(delta)
+			return a, nil
+		}
+	}
+	switch a.screen {
+	case screenTable:
+		if _, _, ok := a.tableMousePos(x, bodyY); ok && !a.table.filtering {
+			a.focus = focusMain
+			a.table.moveCursor(delta)
+		}
+	case screenConfig:
+		if _, _, ok := a.fullPaneMousePos(x, bodyY); ok {
+			scrollViewport(&a.config.vp, delta)
+		}
+	case screenDetail:
+		if _, _, ok := a.fullPaneMousePos(x, bodyY); ok {
+			scrollViewport(&a.detail.vp, delta)
+		}
+	case screenLogs:
+		if _, _, ok := a.fullPaneMousePos(x, bodyY); ok {
+			a.logs.follow = false
+			scrollViewport(&a.logs.vp, delta)
+		}
+	}
+	return a, nil
+}
+
+func scrollViewport(vp interface {
+	ScrollUp(int) []string
+	ScrollDown(int) []string
+}, delta int) {
+	if delta < 0 {
+		vp.ScrollUp(-delta)
+		return
+	}
+	vp.ScrollDown(delta)
 }
 
 // routeAux forwards auxiliary messages (e.g. cursor blink) to the focused input.
@@ -566,10 +714,7 @@ func (a App) updateSidebarKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case msg.String() == "enter" || msg.String() == "right" || msg.String() == "l":
 		if e, ok := a.sidebar.current(); ok {
-			if e.overview {
-				return a.switchToCockpit()
-			}
-			return a.switchResource(e.res)
+			return a.openNavEntry(e)
 		}
 		return a, nil
 	}
@@ -771,6 +916,13 @@ func (a App) switchToCockpit() (tea.Model, tea.Cmd) {
 func (a App) reloadCockpit() (tea.Model, tea.Cmd) {
 	a.loading = true
 	return a, tea.Batch(loadCockpitCmd(a.client), a.spin.Tick)
+}
+
+func (a App) openNavEntry(e navEntry) (tea.Model, tea.Cmd) {
+	if e.overview {
+		return a.switchToCockpit()
+	}
+	return a.switchResource(e.res)
 }
 
 func (a App) openDetail() (tea.Model, tea.Cmd) {

@@ -136,6 +136,34 @@ func (s *sidebar) current() (navEntry, bool) {
 	return s.entries[s.selectable[s.cursor]], true
 }
 
+func (s sidebar) visibleOffset() int {
+	curEntry := -1
+	if len(s.selectable) > 0 {
+		curEntry = s.selectable[s.cursor]
+	}
+	if s.height > 0 && curEntry >= s.height {
+		return curEntry - s.height + 1
+	}
+	return 0
+}
+
+func (s *sidebar) selectAt(y int) (navEntry, bool) {
+	if y < 0 || y >= s.height {
+		return navEntry{}, false
+	}
+	ei := s.visibleOffset() + y
+	if ei < 0 || ei >= len(s.entries) || s.entries[ei].header {
+		return navEntry{}, false
+	}
+	for i, idx := range s.selectable {
+		if idx == ei {
+			s.cursor = i
+			return s.entries[ei], true
+		}
+	}
+	return navEntry{}, false
+}
+
 // syncTo moves the cursor to the entry matching key, if present, so the
 // highlight follows resource switches made elsewhere (palette, jump).
 func (s *sidebar) syncTo(key string) {
@@ -153,12 +181,7 @@ func (s sidebar) View(activeKey string, focused bool) string {
 	if len(s.selectable) > 0 {
 		curEntry = s.selectable[s.cursor]
 	}
-
-	// Scroll so the cursor stays visible.
-	offset := 0
-	if s.height > 0 && curEntry >= s.height {
-		offset = curEntry - s.height + 1
-	}
+	offset := s.visibleOffset()
 
 	var lines []string
 	for i := offset; i < len(s.entries) && len(lines) < s.height; i++ {

@@ -302,6 +302,32 @@ func (v *tableView) ensureVisible() {
 	v.offset = clamp(v.offset, 0, maxOff)
 }
 
+func (v *tableView) colAt(x int) (int, bool) {
+	if x < 0 {
+		return 0, false
+	}
+	pos := 0
+	for n, ci := range v.vis {
+		w := v.widths[n] + 2 // one leading and one trailing cell of padding
+		if x >= pos && x < pos+w {
+			return ci, true
+		}
+		pos += w
+	}
+	return 0, false
+}
+
+func (v *tableView) rowAt(y int) (int, bool) {
+	if y <= 0 { // y=0 is the header line
+		return 0, false
+	}
+	i := v.offset + y - 1
+	if i < 0 || i >= len(v.rows) {
+		return 0, false
+	}
+	return i, true
+}
+
 // Update routes input to the filter box, or moves the cursor.
 func (v tableView) Update(msg tea.Msg) (tableView, tea.Cmd) {
 	if v.filtering {
