@@ -56,6 +56,8 @@ func clamp(v, lo, hi int) int {
 }
 
 const (
+	// paneGap separates the sidebar from the active content pane.
+	paneGap      = 1
 	panePaddingY = 0
 	panePaddingX = 1
 )

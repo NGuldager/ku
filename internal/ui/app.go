@@ -185,7 +185,7 @@ func (a *App) relayout() {
 	if a.sidebarVisible() {
 		sw := a.sidebarWidth()
 		a.sidebar.setSize(paneContentWidth(sw), paneContentHeight(bh))
-		mainW := a.width - sw
+		mainW := a.width - sw - paneGap
 		a.table.setSize(paneContentWidth(mainW), paneContentHeight(bh))
 	} else {
 		a.table.setSize(paneContentWidth(a.width), paneContentHeight(bh))
@@ -481,7 +481,7 @@ func (a App) sidebarMousePos(x, bodyY int) (int, int, bool) {
 func (a App) tableMousePos(x, bodyY int) (int, int, bool) {
 	outerX, outerW := 0, a.width
 	if a.sidebarVisible() {
-		outerX = a.sidebarWidth()
+		outerX = a.sidebarWidth() + paneGap
 		outerW = a.width - outerX
 	}
 	return a.paneMousePos(outerX, outerW, x, bodyY)
@@ -1785,15 +1785,20 @@ func (a App) renderSidebar() string {
 	return a.renderPane(style, a.sidebar.View(a.activeNavKey(), a.focus == focusSidebar), a.sidebarWidth(), a.bodyH())
 }
 
-// paneScreen renders [sidebar | main], wrapping main in a focus-aware border.
+// paneScreen renders [sidebar gap main], wrapping main in a focus-aware border.
 func (a App) paneScreen(main string) string {
 	mainStyle := a.theme.PaneActive
 	if a.focus == focusSidebar {
 		mainStyle = a.theme.PaneInactive
 	}
-	mainW := a.width - a.sidebarWidth()
+	mainW := a.width - a.sidebarWidth() - paneGap
 	box := a.renderPane(mainStyle, main, mainW, a.bodyH())
-	return lipgloss.JoinHorizontal(lipgloss.Top, a.renderSidebar(), box)
+	return lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		a.renderSidebar(),
+		strings.Repeat(" ", paneGap),
+		box,
+	)
 }
 
 func (a App) renderPane(style lipgloss.Style, content string, outerW, outerH int) string {
@@ -1817,11 +1822,11 @@ func (a App) cockpitScreen() string {
 	}
 	// The cockpit's own panels already have borders, so render them directly
 	// beside the nav rather than inside another bordered pane.
-	mainW := a.width - a.sidebarWidth() - cockpitPanelGap
+	mainW := a.width - a.sidebarWidth() - paneGap
 	return lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		a.renderSidebar(),
-		strings.Repeat(" ", cockpitPanelGap),
+		strings.Repeat(" ", paneGap),
 		a.cockpit.View(mainW, a.bodyH()),
 	)
 }
