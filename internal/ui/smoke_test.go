@@ -241,6 +241,32 @@ func TestStaleNodeDebugReadySchedulesCleanup(t *testing.T) {
 	}
 }
 
+func TestUseResourceStartsOnTableScreen(t *testing.T) {
+	th := PickTheme("ansi")
+	app := App{theme: th, screen: screenCockpit, focus: focusSidebar}
+	app.table = newTableView(th)
+	app.table.setData(fakeTable())
+	app.table.setSort(1)
+
+	app.useResource(k8s.ResourceInfo{Group: "apps", Resource: "deployments", Kind: "Deployment", Namespaced: true})
+
+	if app.screen != screenTable {
+		t.Fatalf("screen = %v, want screenTable", app.screen)
+	}
+	if app.focus != focusMain {
+		t.Fatalf("focus = %v, want focusMain", app.focus)
+	}
+	if app.res.Resource != "deployments" {
+		t.Fatalf("resource = %q, want deployments", app.res.Resource)
+	}
+	if app.table.count() != 0 {
+		t.Fatalf("table rows = %d, want cleared table", app.table.count())
+	}
+	if app.table.sortCol != -1 {
+		t.Fatalf("sort column = %d, want reset", app.table.sortCol)
+	}
+}
+
 func mustRender(t *testing.T, m tea.Model, theme string, size [2]int) {
 	t.Helper()
 	defer func() {

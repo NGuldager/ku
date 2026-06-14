@@ -63,8 +63,7 @@ func Run(opts Options) error {
 	}
 	if opts.Resource != "" {
 		if ri, ok := cl.Registry().Resolve(opts.Resource); ok {
-			app.res = ri
-			app.sidebar.syncTo(ri.Key())
+			app.useResource(ri)
 		}
 	}
 

@@ -933,6 +933,11 @@ func (a App) reload() (tea.Model, tea.Cmd) {
 }
 
 func (a App) switchResource(ri k8s.ResourceInfo) (tea.Model, tea.Cmd) {
+	a.useResource(ri)
+	return a.reload()
+}
+
+func (a *App) useResource(ri k8s.ResourceInfo) {
 	a.res = ri
 	a.screen = screenTable
 	a.focus = focusMain
@@ -940,7 +945,6 @@ func (a App) switchResource(ri k8s.ResourceInfo) (tea.Model, tea.Cmd) {
 	a.table.stopFilter(true)
 	a.table.resetSort() // columns differ per resource
 	a.table.setData(nil)
-	return a.reload()
 }
 
 func (a App) switchToCockpit() (tea.Model, tea.Cmd) {
