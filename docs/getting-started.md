@@ -85,33 +85,11 @@ high-contrast look, pass `--theme tokyonight` or set `KLI_THEME=tokyonight`.
 
 ## Configuration
 
-kli reads an optional config file from `~/.config/kli/config.yaml`. The running
-TUI reads it once at startup and never writes it. Use `kli config init` to seed a
-starter file, then edit it yourself.
+kli reads optional sidebar config from `~/.config/kli/config.yaml`. Use
+`kli config init` to seed a starter file, then restart the TUI after edits.
 
-Today the config customizes the left sidebar menu. If a `sidebar:` list is
-present, it replaces the built-in default menu. The Overview entry is always
-available, resources the cluster does not expose are dropped, and empty sections
-are hidden.
-
-```yaml
-sidebar:
-  - section: Workloads
-    items:
-      - { label: Pods, resource: pods }
-      - { label: Deployments, resource: deployments }
-      - { label: HPAs, resource: horizontalpodautoscalers }
-      - { label: ScaledObjects, resource: scaledobjects }
-  - section: Network
-    items:
-      - { label: Services, resource: services }
-```
-
-The built-in default sidebar includes Pods, Deployments, StatefulSets,
-DaemonSets, ReplicaSets, Jobs, CronJobs, Services, Ingresses, Endpoints,
-ConfigMaps, Secrets, ServiceAccounts, PVCs, PVs, StorageClasses, Nodes,
-Namespaces, and Events. HPAs, KEDA ScaledObjects, and OpenTelemetry collectors
-are opt-in examples in a seeded config file.
+See [Configuration](configuration.md) for file paths, sidebar examples,
+resource names, and opt-in resources.
 
 ## Session memory
 

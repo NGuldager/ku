@@ -3,7 +3,8 @@
 A keyboard-driven Kubernetes TUI. These pages cover how to install and run it,
 configure the sidebar, use the keys, and understand each feature.
 
-- [Getting started](getting-started.md) - install, run, flags, config, upgrade.
+- [Getting started](getting-started.md) - install, run, flags, themes, upgrade.
+- [Configuration](configuration.md) - config file paths and sidebar examples.
 - [Keybindings](keybindings.md) - every key, by context.
 - [Features](features.md) - cockpit, tables, config, YAML, logs, shell, actions.
 

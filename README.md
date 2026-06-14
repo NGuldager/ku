@@ -44,43 +44,11 @@ Press `?` for help and `Ctrl+K` for the command palette.
 
 ## Configuration
 
-`kli` reads an optional config file from `~/.config/kli/config.yaml`. Run
-`kli config path` to print it. It is separate from the auto-saved
-context/namespace state at `~/.config/kli/state.json`, and is only written by
-you or by `kli config init`.
+`kli` reads an optional config file from `~/.config/kli/config.yaml` for sidebar
+customization and stores session state in `~/.config/kli/state.json`.
 
-Today it customizes the left sidebar menu. When a `sidebar:` list is present it
-replaces the built-in default menu; without a config file the built-in defaults
-are used. Resources the cluster doesn't expose are dropped, and empty sections
-are hidden.
-
-Seed a starter file with the current defaults (refuses to overwrite without
-`--force`):
-
-```
-kli config init          # write the default config to populate from
-kli config init --force  # overwrite an existing config with the defaults
-kli config path          # print the config file location
-```
-
-The `resource` field accepts anything the resource picker resolves: a plural,
-singular, kind, short name, or group-qualified key (e.g. `scaledobjects.keda.sh`).
-
-```yaml
-sidebar:
-  - section: Workloads
-    items:
-      - { label: Pods, resource: pods }
-      - { label: Deployments, resource: deployments }
-      - { label: HPAs, resource: horizontalpodautoscalers }   # opt-in
-      - { label: ScaledObjects, resource: scaledobjects }      # opt-in (KEDA)
-  - section: Network
-    items:
-      - { label: Services, resource: services }
-```
-
-`HPAs`, `ScaledObjects`, and `OtelCollectors` are not in the default menu; add
-them as above (a freshly seeded config lists them as commented examples).
+See [Configuration](docs/configuration.md) for `kli config init`, sidebar
+examples, resource names, and opt-in resources.
 
 ## Highlights
 
@@ -96,6 +64,7 @@ them as above (a freshly seeded config lists them as commented examples).
 ## Docs
 
 - [Getting started](docs/getting-started.md)
+- [Configuration](docs/configuration.md)
 - [Keybindings](docs/keybindings.md)
 - [Features](docs/features.md)
 
