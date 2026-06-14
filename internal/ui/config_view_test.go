@@ -79,6 +79,74 @@ func TestRenderConfigShowsPodUsageAndIssues(t *testing.T) {
 	}
 }
 
+func TestRenderConfigShowsIngressRuleDetails(t *testing.T) {
+	th := PickTheme("ansi")
+	res := k8s.ResourceInfo{Resource: "ingresses", Kind: "Ingress"}
+	obj := map[string]interface{}{
+		"spec": map[string]interface{}{
+			"ingressClassName": "nginx",
+			"defaultBackend": map[string]interface{}{
+				"service": map[string]interface{}{
+					"name": "fallback",
+					"port": map[string]interface{}{"number": 8080},
+				},
+			},
+			"tls": []interface{}{
+				map[string]interface{}{
+					"hosts":      []interface{}{"app.example.com"},
+					"secretName": "app-cert",
+				},
+			},
+			"rules": []interface{}{
+				map[string]interface{}{
+					"host": "app.example.com",
+					"http": map[string]interface{}{
+						"paths": []interface{}{
+							map[string]interface{}{
+								"path":     "/",
+								"pathType": "Prefix",
+								"backend": map[string]interface{}{
+									"service": map[string]interface{}{
+										"name": "web",
+										"port": map[string]interface{}{"number": 80},
+									},
+								},
+							},
+							map[string]interface{}{
+								"path":     "/api",
+								"pathType": "Prefix",
+								"backend": map[string]interface{}{
+									"service": map[string]interface{}{
+										"name": "api",
+										"port": map[string]interface{}{"name": "http"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	out := renderConfig(th, res, obj, 140, nil)
+	for _, want := range []string{
+		"class", "nginx",
+		"default", "fallback:8080",
+		"tls 1", "app.example.com -> app-cert",
+		"rule 1", "app.example.com", "2 paths",
+		"path 1.1", "/ (Prefix) -> web:80",
+		"path 1.2", "/api (Prefix) -> api:http",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("config view missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "YAML") {
+		t.Fatalf("config overview should not include raw yaml:\n%s", out)
+	}
+}
+
 func TestRenderConfigPutsStatusBeforeOverview(t *testing.T) {
 	th := PickTheme("ansi")
 	tests := []struct {

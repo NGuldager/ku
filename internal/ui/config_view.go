@@ -570,8 +570,18 @@ func serviceRows(obj map[string]interface{}) []configRow {
 
 func ingressRows(obj map[string]interface{}) []configRow {
 	rows := []configRow{{"class", scalarOrDash(obj, "spec", "ingressClassName")}}
+	if backend, ok := mapAt(obj, "spec", "defaultBackend"); ok {
+		rows = append(rows, configRow{"default", ingressBackend(backend)})
+	}
 	if tls, ok := sliceAt(obj, "spec", "tls"); ok {
 		rows = append(rows, configRow{"tls", countSummary(len(tls), "entry")})
+		for i, item := range tls {
+			m, ok := asMap(item)
+			if !ok {
+				continue
+			}
+			rows = append(rows, configRow{fmt.Sprintf("tls %d", i+1), ingressTLS(m)})
+		}
 	}
 	if rules, ok := sliceAt(obj, "spec", "rules"); ok {
 		for i, r := range rules {
@@ -583,8 +593,14 @@ func ingressRows(obj map[string]interface{}) []configRow {
 			if host == "" {
 				host = "*"
 			}
-			paths := ingressPathCount(m)
-			rows = append(rows, configRow{fmt.Sprintf("rule %d", i+1), host + " · " + countSummary(paths, "path")})
+			var paths []interface{}
+			if http, ok := asMap(m["http"]); ok {
+				paths, _ = asSlice(http["paths"])
+			}
+			rows = append(rows, configRow{fmt.Sprintf("rule %d", i+1), host + " · " + countSummary(len(paths), "path")})
+			for j, p := range paths {
+				rows = append(rows, configRow{fmt.Sprintf("path %d.%d", i+1, j+1), ingressPath(p)})
+			}
 		}
 	}
 	return rows
@@ -827,16 +843,72 @@ func volumeSource(v map[string]interface{}) (string, string) {
 	return "volume", ""
 }
 
-func ingressPathCount(rule map[string]interface{}) int {
-	http, ok := asMap(rule["http"])
-	if !ok {
-		return 0
+func ingressTLS(tls map[string]interface{}) string {
+	hosts := "*"
+	if items, ok := asSlice(tls["hosts"]); ok && len(items) > 0 {
+		hosts = joinScalars(items, 4)
 	}
-	paths, ok := asSlice(http["paths"])
-	if !ok {
-		return 0
+	secret, _ := scalarString(tls["secretName"])
+	if secret == "" {
+		return hosts
 	}
-	return len(paths)
+	return hosts + " -> " + secret
+}
+
+func ingressPath(item interface{}) string {
+	p, ok := asMap(item)
+	if !ok {
+		return "-"
+	}
+	path, _ := scalarString(p["path"])
+	if path == "" {
+		path = "/"
+	}
+	if typ, _ := scalarString(p["pathType"]); typ != "" {
+		path += " (" + typ + ")"
+	}
+	backend, ok := asMap(p["backend"])
+	if !ok {
+		return path
+	}
+	return path + " -> " + ingressBackend(backend)
+}
+
+func ingressBackend(backend map[string]interface{}) string {
+	if svc, ok := asMap(backend["service"]); ok {
+		name := scalarInMapOrDash(svc, "name")
+		port := ingressServicePort(svc)
+		if port == "" {
+			return name
+		}
+		if name == "-" {
+			return port
+		}
+		return name + ":" + port
+	}
+	if resource, ok := asMap(backend["resource"]); ok {
+		name := scalarInMapOrDash(resource, "name")
+		kind, _ := scalarString(resource["kind"])
+		if kind == "" {
+			return name
+		}
+		return kind + "/" + name
+	}
+	return "-"
+}
+
+func ingressServicePort(svc map[string]interface{}) string {
+	port, ok := asMap(svc["port"])
+	if !ok {
+		return ""
+	}
+	if name, _ := scalarString(port["name"]); name != "" {
+		return name
+	}
+	if number, _ := scalarString(port["number"]); number != "" {
+		return number
+	}
+	return ""
 }
 
 func dataKeyRows(obj map[string]interface{}, path []string, label string) []configRow {
