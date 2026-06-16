@@ -8,7 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/vt"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 // fakeTable returns a small server-style table for render exercises.
@@ -225,7 +225,7 @@ func TestStaleNodeDebugReadySchedulesCleanup(t *testing.T) {
 	model, cmd := app.Update(nodeDebugReadyMsg{
 		client:    stale,
 		ns:        "default",
-		pod:       "kli-node-debug-abc",
+		pod:       "ku-node-debug-abc",
 		container: "debug",
 		node:      "node-a",
 	})

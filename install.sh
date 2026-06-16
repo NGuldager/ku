@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-REPO="bjarneo/kli"
-NAME="kli"
+REPO="bjarneo/ku"
+NAME="ku"
 
 need() {
     if ! command -v "$1" >/dev/null 2>&1; then

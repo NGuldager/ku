@@ -13,7 +13,7 @@ func TestRunUpgradeHelpPrintsUsage(t *testing.T) {
 			t.Fatalf("runUpgrade(--help): %v", err)
 		}
 	})
-	if !strings.Contains(out, "usage: kli upgrade") {
+	if !strings.Contains(out, "usage: ku upgrade") {
 		t.Fatalf("help output = %q, want usage", out)
 	}
 }

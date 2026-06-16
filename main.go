@@ -1,4 +1,4 @@
-// Command kli is a terminal UI for Kubernetes: browse any resource, view and
+// Command ku is a terminal UI for Kubernetes: browse any resource, view and
 // edit objects, follow logs, and switch namespaces and contexts, all from the
 // keyboard. It uses your default kubeconfig.
 package main
@@ -10,9 +10,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/bjarneo/kli/internal/k8s"
-	"github.com/bjarneo/kli/internal/ui"
-	"github.com/bjarneo/kli/internal/upgrade"
+	"github.com/bjarneo/ku/internal/k8s"
+	"github.com/bjarneo/ku/internal/ui"
+	"github.com/bjarneo/ku/internal/upgrade"
 )
 
 // version is set at build time with -ldflags "-X main.version=vX.Y.Z".
@@ -51,7 +51,7 @@ func main() {
 
 	switch {
 	case versionFlag:
-		fmt.Println("kli", version)
+		fmt.Println("ku", version)
 		return
 	case checkFlag:
 		if err := check(ctxFlag, kubeconfigFlag, nsFlag, resFlag); err != nil {
@@ -79,10 +79,10 @@ func runUpgrade(args []string) error {
 	}
 	switch args[0] {
 	case "--help", "-h", "help":
-		fmt.Println("usage: kli upgrade")
+		fmt.Println("usage: ku upgrade")
 		return nil
 	default:
-		return fmt.Errorf("usage: kli upgrade")
+		return fmt.Errorf("usage: ku upgrade")
 	}
 }
 
@@ -114,7 +114,7 @@ func check(ctxName, kubeconfig, ns, resQuery string) error {
 	return nil
 }
 
-// runConfig handles the `kli config <subcommand>` family.
+// runConfig handles the `ku config <subcommand>` family.
 func runConfig(args []string) error {
 	sub := ""
 	if len(args) > 0 {
@@ -142,6 +142,6 @@ func runConfig(args []string) error {
 		fmt.Println(path)
 		return nil
 	default:
-		return fmt.Errorf("usage: kli config <init [--force] | path>")
+		return fmt.Errorf("usage: ku config <init [--force] | path>")
 	}
 }

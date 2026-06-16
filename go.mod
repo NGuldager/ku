@@ -1,4 +1,4 @@
-module github.com/bjarneo/kli
+module github.com/bjarneo/ku
 
 go 1.26.3
 

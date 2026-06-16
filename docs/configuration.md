@@ -1,27 +1,27 @@
 # Configuration
 
-Customize the left sidebar with `~/.config/kli/config.yaml`.
+Customize the left sidebar with `~/.config/ku/config.yaml`.
 
 ## Quick Start
 
 ```bash
-kli config init          # write the default config to populate from
-kli config init --force  # overwrite an existing config with the defaults
-kli config path          # print the config file location
+ku config init          # write the default config to populate from
+ku config init --force  # overwrite an existing config with the defaults
+ku config path          # print the config file location
 ```
 
-After seeding the file, edit it and restart `kli`. The running TUI reads config
+After seeding the file, edit it and restart `ku`. The running TUI reads config
 once at startup and never writes it.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `~/.config/kli/config.yaml` | user-authored config file |
-| `~/.config/kli/state.json` | auto-saved context and namespace state |
+| `~/.config/ku/config.yaml` | user-authored config file |
+| `~/.config/ku/state.json` | auto-saved context and namespace state |
 
 The config file is separate from session state. `config.yaml` is only written by
-you or by `kli config init`; `state.json` is managed automatically.
+you or by `ku config init`; `state.json` is managed automatically.
 
 ## Sidebar
 

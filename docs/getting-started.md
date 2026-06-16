@@ -5,46 +5,46 @@
 Install the latest release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bjarneo/kli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/bjarneo/ku/main/install.sh | sh
 ```
 
 Or install with Go:
 
 ```bash
-go install github.com/bjarneo/kli@latest
+go install github.com/bjarneo/ku@latest
 ```
 
 Or build from a clone:
 
 ```
 make install            # builds and installs to a bin dir on PATH
-go build -o kli .       # local binary only
+go build -o ku .       # local binary only
 ```
 
-Building from source requires Go 1.26.3+. Running kli requires access to a
-cluster. kli reads your default kubeconfig.
+Building from source requires Go 1.26.3+. Running ku requires access to a
+cluster. ku reads your default kubeconfig.
 
 ## Run
 
 ```
-kli                       # current context, remembered namespace
-kli --context my-ctx      # a specific context
-kli -n kube-system        # start in a namespace
-kli --resource deploy     # start on a resource type
-kli --theme tokyonight    # use the Tokyo Night theme
-kli --check               # read-only connectivity check, no UI
-kli --version
+ku                       # current context, remembered namespace
+ku --context my-ctx      # a specific context
+ku -n kube-system        # start in a namespace
+ku --resource deploy     # start on a resource type
+ku --theme tokyonight    # use the Tokyo Night theme
+ku --check               # read-only connectivity check, no UI
+ku --version
 ```
 
 ## Commands
 
 | Command | Description |
 | --- | --- |
-| `kli` | start the TUI |
-| `kli config init` | write a starter config file with the built-in sidebar defaults |
-| `kli config init --force` | overwrite the config file with the current defaults |
-| `kli config path` | print the config file location |
-| `kli upgrade` | download the latest release binary and replace the current binary |
+| `ku` | start the TUI |
+| `ku config init` | write a starter config file with the built-in sidebar defaults |
+| `ku config init --force` | overwrite the config file with the current defaults |
+| `ku config path` | print the config file location |
+| `ku upgrade` | download the latest release binary and replace the current binary |
 
 ## Flags
 
@@ -64,7 +64,7 @@ singular, kind, short name, or group-qualified key such as
 
 ## Layout
 
-kli opens on the cockpit, a cluster overview (health, node CPU/memory, pods,
+ku opens on the cockpit, a cluster overview (health, node CPU/memory, pods,
 deployments, and recent warnings). From there:
 
 - A left nav lists Overview plus common resource kinds, grouped by category.
@@ -81,18 +81,18 @@ pane has a highlighted border.
 
 The default theme uses your terminal's own ANSI palette and adapts to a light or
 dark background, so it matches whatever scheme you already run. For a fixed,
-high-contrast look, pass `--theme tokyonight` or set `KLI_THEME=tokyonight`.
+high-contrast look, pass `--theme tokyonight` or set `KU_THEME=tokyonight`.
 
 ## Configuration
 
-kli reads optional sidebar config from `~/.config/kli/config.yaml`. Use
-`kli config init` to seed a starter file, then restart the TUI after edits.
+ku reads optional sidebar config from `~/.config/ku/config.yaml`. Use
+`ku config init` to seed a starter file, then restart the TUI after edits.
 
 See [Configuration](configuration.md) for file paths, sidebar examples,
 resource names, and opt-in resources.
 
 ## Session memory
 
-kli remembers the last context and namespace you used and restores them on the
+ku remembers the last context and namespace you used and restores them on the
 next launch. Flags override the remembered values. State is written to
-`~/.config/kli/state.json`.
+`~/.config/ku/state.json`.

@@ -7,7 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 // cockpitView renders the cluster overview dashboard shown on launch.

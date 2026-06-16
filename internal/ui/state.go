@@ -14,7 +14,7 @@ type savedState struct {
 }
 
 func stateFile() (string, error) {
-	return kliConfigFile("state.json")
+	return kuConfigFile("state.json")
 }
 
 func loadState() (savedState, bool) {

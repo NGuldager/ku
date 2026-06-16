@@ -9,7 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 const (
@@ -358,7 +358,7 @@ func prepareEditCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.C
 			return editReadyMsg{client: cl, err: err}
 		}
 		safe := strings.NewReplacer("/", "_", " ", "_").Replace(name)
-		f, err := os.CreateTemp("", "kli-"+safe+"-*.yaml")
+		f, err := os.CreateTemp("", "ku-"+safe+"-*.yaml")
 		if err != nil {
 			return editReadyMsg{client: cl, err: err}
 		}

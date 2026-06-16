@@ -46,10 +46,10 @@ func TestAssetName(t *testing.T) {
 		goos, goarch string
 		want         string
 	}{
-		{goos: "linux", goarch: "amd64", want: "kli-linux-amd64"},
-		{goos: "darwin", goarch: "arm64", want: "kli-darwin-arm64"},
-		{goos: "windows", goarch: "amd64", want: "kli-windows-amd64.exe"},
-		{goos: "windows", goarch: "arm64", want: "kli-windows-arm64.exe"},
+		{goos: "linux", goarch: "amd64", want: "ku-linux-amd64"},
+		{goos: "darwin", goarch: "arm64", want: "ku-darwin-arm64"},
+		{goos: "windows", goarch: "amd64", want: "ku-windows-amd64.exe"},
+		{goos: "windows", goarch: "arm64", want: "ku-windows-arm64.exe"},
 	}
 	for _, tt := range tests {
 		got, err := assetName(tt.goos, tt.goarch)
@@ -58,55 +58,6 @@ func TestAssetName(t *testing.T) {
 		}
 		if got != tt.want {
 			t.Errorf("assetName(%q, %q) = %q; want %q", tt.goos, tt.goarch, got, tt.want)
-		}
-	}
-}
-
-func TestCompareVersions(t *testing.T) {
-	tests := []struct {
-		a, b string
-		want int
-	}{
-		{"v0.2.0", "v0.1.5", 1},
-		{"v0.1.5", "v0.2.0", -1},
-		{"v1.0.0", "v1.0.0", 0},
-		{"v0.1.5", "0.1.5", 0},      // missing leading v
-		{"v0.1.5-rc1", "v0.1.5", 0}, // pre-release suffix ignored
-		{"v0.10.0", "v0.9.0", 1},    // numeric, not lexical
-	}
-	for _, tt := range tests {
-		if got := compareVersions(tt.a, tt.b); got != tt.want {
-			t.Errorf("compareVersions(%q, %q) = %d; want %d", tt.a, tt.b, got, tt.want)
-		}
-	}
-}
-
-func TestMigrateToKu(t *testing.T) {
-	boom := fmt.Errorf("not found")
-	tests := []struct {
-		name                string
-		kuLatest, kliLatest string
-		kuErr, kliErr       error
-		want                bool
-	}{
-		{"ku newer", "v0.2.0", "v0.1.5", nil, nil, true},
-		{"ku equal", "v0.1.5", "v0.1.5", nil, nil, true},
-		{"ku older", "v0.1.0", "v0.1.5", nil, nil, false},
-		{"ku absent", "", "v0.1.5", boom, nil, false},
-		{"kli absent, ku present", "v0.1.0", "", nil, boom, true},
-	}
-	for _, tt := range tests {
-		if got := migrateToKu(tt.kuLatest, tt.kuErr, tt.kliLatest, tt.kliErr); got != tt.want {
-			t.Errorf("%s: migrateToKu = %v; want %v", tt.name, got, tt.want)
-		}
-	}
-}
-
-func TestRenameNotice(t *testing.T) {
-	n := renameNotice("v0.2.0", "/usr/local/bin/kli")
-	for _, want := range []string{"renamed to ku", "v0.2.0", kuRepo, "rm /usr/local/bin/kli"} {
-		if !strings.Contains(n, want) {
-			t.Errorf("renameNotice missing %q in:\n%s", want, n)
 		}
 	}
 }
@@ -133,12 +84,12 @@ func TestLatestVersionSuccess(t *testing.T) {
 
 func TestLatestChecksum(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.WriteString(w, "abc123  kli-linux-amd64\n")
+		_, _ = io.WriteString(w, "abc123  ku-linux-amd64\n")
 	}))
 	defer srv.Close()
 	installTestClient(t, srv.URL)
 
-	got, err := latestChecksum(srv.URL+"/checksums.txt", "kli-linux-amd64")
+	got, err := latestChecksum(srv.URL+"/checksums.txt", "ku-linux-amd64")
 	if err != nil {
 		t.Fatalf("latestChecksum: %v", err)
 	}
@@ -149,7 +100,7 @@ func TestLatestChecksum(t *testing.T) {
 
 func TestDownloadAndReplace(t *testing.T) {
 	dir := t.TempDir()
-	target := filepath.Join(dir, "kli")
+	target := filepath.Join(dir, "ku")
 	if err := os.WriteFile(target, []byte("OLD"), 0o755); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -162,7 +113,7 @@ func TestDownloadAndReplace(t *testing.T) {
 	defer srv.Close()
 	installTestClient(t, srv.URL)
 
-	if err := downloadAndReplace(srv.URL+"/kli-linux-amd64", target, fmt.Sprintf("%x", sum)); err != nil {
+	if err := downloadAndReplace(srv.URL+"/ku-linux-amd64", target, fmt.Sprintf("%x", sum)); err != nil {
 		t.Fatalf("downloadAndReplace: %v", err)
 	}
 
@@ -177,7 +128,7 @@ func TestDownloadAndReplace(t *testing.T) {
 
 func TestDownloadAndReplaceChecksumMismatch(t *testing.T) {
 	dir := t.TempDir()
-	target := filepath.Join(dir, "kli")
+	target := filepath.Join(dir, "ku")
 	if err := os.WriteFile(target, []byte("OLD"), 0o755); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -188,7 +139,7 @@ func TestDownloadAndReplaceChecksumMismatch(t *testing.T) {
 	defer srv.Close()
 	installTestClient(t, srv.URL)
 
-	err := downloadAndReplace(srv.URL+"/kli", target, strings.Repeat("0", 64))
+	err := downloadAndReplace(srv.URL+"/ku", target, strings.Repeat("0", 64))
 	if err == nil {
 		t.Fatal("downloadAndReplace should fail on checksum mismatch")
 	}

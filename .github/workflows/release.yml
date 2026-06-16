@@ -52,7 +52,7 @@ jobs:
           if [ "$VERSION" = "$GITHUB_REF" ]; then
             VERSION="dev-${GITHUB_SHA::7}"
           fi
-          BINARY="kli-${GOOS}-${GOARCH}"
+          BINARY="ku-${GOOS}-${GOARCH}"
           if [ "$GOOS" = "windows" ]; then
             BINARY="${BINARY}.exe"
           fi
@@ -61,8 +61,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: kli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: kli-*
+          name: ku-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ku-*
 
   release:
     needs: build
@@ -83,7 +83,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd artifacts
-          sha256sum kli-* > checksums.txt
+          sha256sum ku-* > checksums.txt
           cat checksums.txt
 
       - name: Generate release notes
@@ -137,5 +137,5 @@ jobs:
         with:
           body_path: release_notes.md
           files: |
-            artifacts/kli-*
+            artifacts/ku-*
             artifacts/checksums.txt

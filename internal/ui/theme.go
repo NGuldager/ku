@@ -29,7 +29,7 @@ type Palette struct {
 	ReverseSel bool
 }
 
-// ansiPalette uses the terminal's own 16-color ANSI palette so kli looks
+// ansiPalette uses the terminal's own 16-color ANSI palette so ku looks
 // consistent with whatever color scheme the user already runs. The accent and
 // status colors use the bright variants (8-15) on dark backgrounds; muted text
 // avoids bright black because many dark themes render it too low-contrast.
@@ -180,11 +180,11 @@ func NewTheme(name string, p Palette) Theme {
 
 // PickTheme selects the theme. ANSI is the default and adapts to a light or
 // dark terminal background; Tokyo Night is the fixed fallback, selectable via
-// --theme or $KLI_THEME. Detection runs here (called before the Bubble Tea
+// --theme or $KU_THEME. Detection runs here (called before the Bubble Tea
 // program starts) so it does not race the program's stdin reader.
 func PickTheme(name string) Theme {
 	if name == "" {
-		name = os.Getenv("KLI_THEME")
+		name = os.Getenv("KU_THEME")
 	}
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "tokyonight", "tokyo-night", "tokyo":

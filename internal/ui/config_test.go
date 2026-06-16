@@ -43,7 +43,7 @@ func TestConfigFilesUseHomeConfigDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stateFile: %v", err)
 	}
-	dir := filepath.Join(home, ".config", "kli")
+	dir := filepath.Join(home, ".config", "ku")
 	if want := filepath.Join(dir, "config.yaml"); config != want {
 		t.Fatalf("configPath() = %q; want %q", config, want)
 	}

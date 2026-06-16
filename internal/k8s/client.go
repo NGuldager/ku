@@ -61,7 +61,7 @@ func NewClient(contextOverride, kubeconfigPath string) (*Client, error) {
 	restCfg.QPS = 50
 	restCfg.Burst = 100
 	if restCfg.UserAgent == "" {
-		restCfg.UserAgent = "kli"
+		restCfg.UserAgent = "ku"
 	}
 	// API warning headers are useful in logs but corrupt the terminal UI when the
 	// default client-go handler writes them directly to stderr.

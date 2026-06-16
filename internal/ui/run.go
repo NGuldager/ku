@@ -6,7 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// Options configures a kli session.
+// Options configures a ku session.
 type Options struct {
 	Context    string
 	Namespace  string
@@ -40,5 +40,5 @@ func Run(opts Options) error {
 
 // goodbye is the farewell line printed after a clean quit.
 func goodbye(th Theme) string {
-	return th.HeaderVal.Render("kli") + th.Dim.Render(" · see you next time · "+creatorHandle)
+	return th.HeaderVal.Render("ku") + th.Dim.Render(" · see you next time · "+creatorHandle)
 }

@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 func TestDeploymentLogsKeyStartsLookup(t *testing.T) {

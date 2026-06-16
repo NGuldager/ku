@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 // commandView shows the kubectl command that most closely reproduces the

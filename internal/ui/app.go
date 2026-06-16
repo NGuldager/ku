@@ -16,7 +16,7 @@ import (
 	"github.com/charmbracelet/x/vt"
 	"github.com/creack/pty"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 type screen int
@@ -1077,7 +1077,7 @@ func (a App) updateTerm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.screen = screenTable
 		return a, nil
 	}
-	// ctrl+\ detaches/cancels without killing kli; everything else goes to the
+	// ctrl+\ detaches/cancels without killing ku; everything else goes to the
 	// running program.
 	if msg.String() == "ctrl+\\" {
 		note := "shell detached"
@@ -1961,7 +1961,7 @@ func (a App) View() tea.View {
 
 func (a App) render() string {
 	if a.width == 0 || a.height == 0 {
-		return "starting kli…"
+		return "starting ku…"
 	}
 	if a.splash {
 		return lipgloss.NewStyle().Padding(a.gutter, a.gutter).Render(a.splashView())
@@ -1997,7 +1997,7 @@ func (a App) render() string {
 	return lipgloss.NewStyle().Padding(a.gutter, a.gutter).Render(frame)
 }
 
-const kliLogo = `██   ██ ██    ██
+const kuLogo = `██   ██ ██    ██
 ██  ██  ██    ██
 █████   ██    ██
 ██  ██  ██    ██
@@ -2006,7 +2006,7 @@ const kliLogo = `██   ██ ██    ██
 // splashView centers the logo, a spinner, and the creator credit while the
 // cluster connection and config load in the background.
 func (a App) splashView() string {
-	logo := a.theme.HeaderVal.Render(kliLogo)
+	logo := a.theme.HeaderVal.Render(kuLogo)
 	w := lipgloss.Width(logo)
 	spin := lipgloss.PlaceHorizontal(w, lipgloss.Center, a.spin.View())
 	credit := lipgloss.PlaceHorizontal(w, lipgloss.Center, a.theme.Dim.Render(creatorHandle))
@@ -2095,7 +2095,7 @@ func (a App) cockpitScreen() string {
 
 func (a App) headerView() string {
 	th := a.theme
-	logo := th.Logo.Render("KLI")
+	logo := th.Logo.Render("KU")
 
 	chip := func(k, v string) string {
 		return th.HeaderKey.Render(k+" ") + th.HeaderVal.Render(v)

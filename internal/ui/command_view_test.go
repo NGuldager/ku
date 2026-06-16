@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 func TestKubectlTableCommandAllNamespaces(t *testing.T) {
@@ -21,7 +21,7 @@ func TestKubectlTableCommandAllNamespaces(t *testing.T) {
 
 func TestKubectlObjectCommandUsesContextNamespaceAndGroup(t *testing.T) {
 	app := App{
-		client:    &k8s.Client{ContextName: "kind-kli-demo"},
+		client:    &k8s.Client{ContextName: "kind-ku-demo"},
 		namespace: "default",
 	}
 	target := target{
@@ -30,7 +30,7 @@ func TestKubectlObjectCommandUsesContextNamespaceAndGroup(t *testing.T) {
 	}
 
 	got := app.kubectlGetObjectCommand(target)
-	want := "kubectl --context kind-kli-demo get deployments.apps frontend -n default -o yaml"
+	want := "kubectl --context kind-ku-demo get deployments.apps frontend -n default -o yaml"
 	if got != want {
 		t.Fatalf("kubectlGetObjectCommand() = %q; want %q", got, want)
 	}
@@ -38,16 +38,16 @@ func TestKubectlObjectCommandUsesContextNamespaceAndGroup(t *testing.T) {
 
 func TestKubectlLogsCommand(t *testing.T) {
 	app := App{
-		client: &k8s.Client{ContextName: "kind-kli-demo"},
+		client: &k8s.Client{ContextName: "kind-ku-demo"},
 		logs: logView{
-			ns:   "kli-demo",
+			ns:   "ku-demo",
 			pod:  "frontend-7d9",
 			cont: "web",
 		},
 	}
 
 	got := app.kubectlLogsCommand()
-	want := "kubectl --context kind-kli-demo logs -n kli-demo frontend-7d9 -c web --tail 1000 -f"
+	want := "kubectl --context kind-ku-demo logs -n ku-demo frontend-7d9 -c web --tail 1000 -f"
 	if got != want {
 		t.Fatalf("kubectlLogsCommand() = %q; want %q", got, want)
 	}
@@ -55,15 +55,15 @@ func TestKubectlLogsCommand(t *testing.T) {
 
 func TestKubectlDeploymentLogsCommand(t *testing.T) {
 	app := App{
-		client: &k8s.Client{ContextName: "kind-kli-demo"},
+		client: &k8s.Client{ContextName: "kind-ku-demo"},
 		logs: logView{
-			ns:     "kli-demo",
+			ns:     "ku-demo",
 			deploy: "frontend",
 		},
 	}
 
 	got := app.kubectlLogsCommand()
-	want := "kubectl --context kind-kli-demo logs -n kli-demo deployment/frontend --all-pods --all-containers --prefix --tail 1000 -f"
+	want := "kubectl --context kind-ku-demo logs -n ku-demo deployment/frontend --all-pods --all-containers --prefix --tail 1000 -f"
 	if got != want {
 		t.Fatalf("kubectlLogsCommand() = %q; want %q", got, want)
 	}

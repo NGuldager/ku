@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	apiresource "k8s.io/apimachinery/pkg/api/resource"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 const configKeyWidth = 14

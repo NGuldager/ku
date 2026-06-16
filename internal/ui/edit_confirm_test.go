@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 func TestApplyEditedFilePromptsBeforeApply(t *testing.T) {
@@ -69,7 +69,7 @@ func TestStaleEditReadyRemovesTempFile(t *testing.T) {
 
 func writeTempEdit(t *testing.T, content string) string {
 	t.Helper()
-	f, err := os.CreateTemp("", "kli-edit-confirm-*.yaml")
+	f, err := os.CreateTemp("", "ku-edit-confirm-*.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}

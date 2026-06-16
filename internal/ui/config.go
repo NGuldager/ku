@@ -11,7 +11,7 @@ import (
 
 // Config is the user-authored configuration file (distinct from the auto-saved
 // state.json). It is read once at startup and never written by the running TUI;
-// only the user edits it, or `kli config init` seeds it. The first supported key
+// only the user edits it, or `ku config init` seeds it. The first supported key
 // is the sidebar menu; the struct leaves room for more keys later.
 type Config struct {
 	Sidebar []SidebarSection `yaml:"sidebar,omitempty"`
@@ -31,20 +31,30 @@ type SidebarItem struct {
 	Resource string `yaml:"resource"`
 }
 
-func kliConfigFile(name string) (string, error) {
+func kuConfigFile(name string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "kli", name), nil
+	dir := filepath.Join(home, ".config", "ku")
+	// Migrate the pre-rename location once: kli stored config and state under
+	// ~/.config/kli. If the new directory does not exist yet but the old one
+	// does, move it so existing users keep their config and saved state.
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		old := filepath.Join(home, ".config", "kli")
+		if _, oerr := os.Stat(old); oerr == nil {
+			_ = os.Rename(old, dir)
+		}
+	}
+	return filepath.Join(dir, name), nil
 }
 
-// configPath is ~/.config/kli/config.yaml.
+// configPath is ~/.config/ku/config.yaml.
 func configPath() (string, error) {
-	return kliConfigFile("config.yaml")
+	return kuConfigFile("config.yaml")
 }
 
-// ConfigPath exposes the resolved config file path for the `kli config path`
+// ConfigPath exposes the resolved config file path for the `ku config path`
 // subcommand.
 func ConfigPath() (string, error) { return configPath() }
 
@@ -89,7 +99,7 @@ func (c Config) sidebarCatalog() []navCatGroup {
 }
 
 // catalogConfig builds a Config from a nav catalog, used to serialize the
-// defaults for `kli config init`.
+// defaults for `ku config init`.
 func catalogConfig(cat []navCatGroup) Config {
 	cfg := Config{Sidebar: make([]SidebarSection, 0, len(cat))}
 	for _, g := range cat {

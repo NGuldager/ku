@@ -9,7 +9,7 @@ import (
 
 // highlightYAML applies lightweight, theme-aware syntax highlighting to YAML:
 // keys, comments, and scalar values (booleans, numbers, quoted strings). It is
-// line-based, which is enough for the single-object manifests kli shows.
+// line-based, which is enough for the single-object manifests ku shows.
 func highlightYAML(s string, th Theme) string {
 	keyStyle := lipgloss.NewStyle().Foreground(th.P.Accent)
 	boolStyle := lipgloss.NewStyle().Foreground(th.P.Accent2)

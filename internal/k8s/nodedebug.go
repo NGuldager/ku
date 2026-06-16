@@ -11,9 +11,9 @@ import (
 )
 
 // nodeDebugImage is the image used for the node debug pod. Override with
-// $KLI_DEBUG_IMAGE. It only needs a shell and chroot (busybox suffices).
+// $KU_DEBUG_IMAGE. It only needs a shell and chroot (busybox suffices).
 func nodeDebugImage() string {
-	if img := os.Getenv("KLI_DEBUG_IMAGE"); img != "" {
+	if img := os.Getenv("KU_DEBUG_IMAGE"); img != "" {
 		return img
 	}
 	return "busybox"
@@ -34,8 +34,8 @@ func (c *Client) CreateNodeDebugPod(ctx context.Context, namespace, nodeName str
 	deadline := int64(3600)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "kli-node-debug-",
-			Labels:       map[string]string{"app.kubernetes.io/managed-by": "kli"},
+			GenerateName: "ku-node-debug-",
+			Labels:       map[string]string{"app.kubernetes.io/managed-by": "ku"},
 		},
 		Spec: corev1.PodSpec{
 			NodeName:              nodeName,

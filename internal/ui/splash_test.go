@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 func newSplashApp() App {
@@ -68,8 +68,8 @@ func TestAdoptStartupTransitionsToCockpit(t *testing.T) {
 
 func TestGoodbyeMentionsAppAndCredit(t *testing.T) {
 	plain := ansi.Strip(goodbye(PickTheme("ansi")))
-	if !strings.Contains(plain, "kli") || !strings.Contains(plain, creatorHandle) {
-		t.Fatalf("goodbye should mention kli and the credit, got %q", plain)
+	if !strings.Contains(plain, "ku") || !strings.Contains(plain, creatorHandle) {
+		t.Fatalf("goodbye should mention ku and the credit, got %q", plain)
 	}
 }
 

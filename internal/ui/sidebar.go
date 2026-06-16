@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bjarneo/kli/internal/k8s"
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 // crdState tracks the CRD discovery button: not yet run, running, or done.
@@ -26,7 +26,7 @@ type navCatGroup struct {
 // defaultNavCatalog is the curated, lazygit-style quick list used when the user
 // has no config file. Entries that the cluster does not expose are dropped, and
 // empty sections are hidden. Resources beyond these core ones (CRDs, autoscalers,
-// etc.) are opt-in via the config file; see config.go and `kli config init`.
+// etc.) are opt-in via the config file; see config.go and `ku config init`.
 func defaultNavCatalog() []navCatGroup {
 	return []navCatGroup{
 		{"Workloads", []navCatItem{
