@@ -103,12 +103,18 @@ const (
 	panePaddingX = 1
 )
 
+// paneStyleWidth/paneStyleHeight are the values to pass to a bordered pane
+// style's Width/Height. In lipgloss v2 those set the box's total size (border
+// and padding included), so they are simply the outer size; the content area
+// then works out to paneContentWidth/paneContentHeight. Returning outer-2 here
+// (a pre-v2 habit) shrank the box and squeezed the content area, which wrapped
+// full-width lines and pushed the bottom border out of view.
 func paneStyleWidth(outer int) int {
-	return paneInnerSize(outer, 2)
+	return outer
 }
 
 func paneStyleHeight(outer int) int {
-	return paneInnerSize(outer, 2)
+	return outer
 }
 
 func paneContentWidth(outer int) int {
