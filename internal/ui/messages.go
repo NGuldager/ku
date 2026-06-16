@@ -128,10 +128,46 @@ type crdsDiscoveredMsg struct {
 	crds   []k8s.ResourceInfo
 }
 
+// startupReadyMsg carries the result of connecting to the cluster and loading
+// the config in the background while the splash screen shows.
+type startupReadyMsg struct {
+	client  *k8s.Client
+	catalog []navCatGroup
+	cfgErr  error
+	err     error
+}
+
 // --- commands ---------------------------------------------------------------
 
 func opCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), opTimeout)
+}
+
+// startupCmd connects to the cluster and resolves the sidebar catalog off the
+// UI thread so the splash can animate. Flags take precedence over the
+// remembered context; a stale remembered context falls back to the default.
+func startupCmd(opts Options, saved savedState, hasSaved bool) tea.Cmd {
+	return func() tea.Msg {
+		ctxName := opts.Context
+		if ctxName == "" && hasSaved {
+			ctxName = saved.Context
+		}
+		cl, err := k8s.NewClient(ctxName, opts.Kubeconfig)
+		if err != nil && opts.Context == "" && ctxName != "" {
+			cl, err = k8s.NewClient("", opts.Kubeconfig)
+		}
+		if err != nil {
+			return startupReadyMsg{err: err}
+		}
+		catalog := defaultNavCatalog()
+		cfg, found, cfgErr := loadConfig()
+		if found {
+			if c := cfg.sidebarCatalog(); len(c) > 0 {
+				catalog = c
+			}
+		}
+		return startupReadyMsg{client: cl, catalog: catalog, cfgErr: cfgErr}
+	}
 }
 
 func discoverCRDsCmd(cl *k8s.Client) tea.Cmd {

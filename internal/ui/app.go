@@ -71,6 +71,16 @@ type App struct {
 	crds     []k8s.ResourceInfo // CRDs surfaced by the sidebar discovery button
 	crdState crdState
 
+	// Startup splash: the program shows the logo + spinner while the cluster
+	// connection and config load run in the background (startupCmd). opts/saved
+	// are kept so the load result can be applied; startErr surfaces a fatal
+	// connection error to Run after the program exits.
+	splash   bool
+	opts     Options
+	saved    savedState
+	hasSaved bool
+	startErr error
+
 	width, height int // usable area, inside the outer gutter
 	gutter        int // equal padding (cells) on every side
 
@@ -114,29 +124,37 @@ type App struct {
 	statusErr bool
 }
 
-// NewApp builds the root model for a connected client.
-func NewApp(cl *k8s.Client, th Theme, navCat []navCatGroup) App {
-	a := App{
-		client: cl,
-		theme:  th,
-		keys:   defaultKeys(),
-		navCat: navCat,
-	}
-	a.sidebar = newSidebar(th, cl.Registry(), navCat, a.crds, a.crdState)
-	a.cockpit = newCockpitView(th)
-	a.table = newTableView(th)
-	a.config = newConfigView(th)
-	a.detail = newDetailView(th)
-	a.logs = newLogView(th)
-	a.sel = newSelector(th)
-	a.help = newHelpView(th, a.keys)
-	a.term = newTermView(th)
-	a.command = newCommandView(th)
-
+func newSpinner(th Theme) spinner.Model {
 	sp := spinner.New()
 	sp.Spinner = spinner.MiniDot
 	sp.Style = th.Spinner
-	a.spin = sp
+	return sp
+}
+
+// NewApp builds the root model for a connected client.
+func NewApp(cl *k8s.Client, th Theme, navCat []navCatGroup) App {
+	a := App{theme: th, keys: defaultKeys()}
+	a.spin = newSpinner(th)
+	a.connect(cl, navCat)
+	return a
+}
+
+// connect wires up the views and initial state for a freshly connected client.
+// It is used both by NewApp and by the splash screen once startup finishes; the
+// spinner is left untouched so its tick loop carries over.
+func (a *App) connect(cl *k8s.Client, navCat []navCatGroup) {
+	a.client = cl
+	a.navCat = navCat
+	a.sidebar = newSidebar(a.theme, cl.Registry(), navCat, a.crds, a.crdState)
+	a.cockpit = newCockpitView(a.theme)
+	a.table = newTableView(a.theme)
+	a.config = newConfigView(a.theme)
+	a.detail = newDetailView(a.theme)
+	a.logs = newLogView(a.theme)
+	a.sel = newSelector(a.theme)
+	a.help = newHelpView(a.theme, a.keys)
+	a.term = newTermView(a.theme)
+	a.command = newCommandView(a.theme)
 
 	if ri, ok := cl.Registry().Resolve("pods"); ok {
 		a.res = ri
@@ -154,17 +172,57 @@ func NewApp(cl *k8s.Client, th Theme, navCat []navCatGroup) App {
 	if cl.DiscoveryWarning != "" {
 		a.setStatus(cl.DiscoveryWarning, true)
 	}
-	return a
+}
+
+// adoptStartup applies the background startup result, leaving the splash for the
+// cockpit. A fatal connection error is surfaced to Run via startErr and quits.
+func (a App) adoptStartup(m startupReadyMsg) (tea.Model, tea.Cmd) {
+	if m.err != nil {
+		a.startErr = m.err
+		return a, tea.Quit
+	}
+	a.splash = false
+	a.connect(m.client, m.catalog)
+	if m.cfgErr != nil {
+		a.setStatus("config: "+m.cfgErr.Error()+"; using defaults", true)
+	}
+	switch {
+	case a.opts.Namespace != "":
+		a.namespace = a.opts.Namespace
+		a.lastNS = a.opts.Namespace
+	case a.hasSaved && a.saved.Context == m.client.ContextName:
+		// Only restore the namespace if we connected to the saved context.
+		a.namespace = a.saved.Namespace
+		if a.saved.Namespace != "" {
+			a.lastNS = a.saved.Namespace
+		}
+	}
+	if a.opts.Resource != "" {
+		if ri, ok := m.client.Registry().Resolve(a.opts.Resource); ok {
+			a.useResource(ri)
+		}
+	}
+	a.relayout()
+	a.loading = true // keep the spinner running through the first load
+	return a, tea.Batch(tickCmd(), a.loadCmd())
 }
 
 func (a App) Init() tea.Cmd {
-	cmds := []tea.Cmd{a.spin.Tick, tickCmd()}
-	if a.screen == screenCockpit {
-		cmds = append(cmds, loadCockpitCmd(a.client, a.loadSeq))
-	} else {
-		cmds = append(cmds, loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace))
+	if a.splash {
+		// Animate the spinner while the cluster connection and config load run in
+		// the background.
+		return tea.Batch(a.spin.Tick, startupCmd(a.opts, a.saved, a.hasSaved))
 	}
-	return tea.Batch(cmds...)
+	return tea.Batch(a.spin.Tick, tickCmd(), a.loadCmd())
+}
+
+// loadCmd fetches the data for the current screen: the cockpit overview, or the
+// active resource's table.
+func (a App) loadCmd() tea.Cmd {
+	if a.screen == screenCockpit {
+		return loadCockpitCmd(a.client, a.loadSeq)
+	}
+	return loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace)
 }
 
 func (a App) bodyH() int {
@@ -222,6 +280,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.width = m.Width - 2*a.gutter
 		a.height = m.Height - 2*a.gutter
+		if a.splash {
+			return a, nil // no panes to lay out yet
+		}
 		if !a.sidebarVisible() {
 			a.focus = focusMain
 		}
@@ -232,15 +293,24 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case tea.KeyMsg:
+		// Ignore input until the cluster is connected, except ctrl+c, which
+		// handleKey handles uniformly.
+		if a.splash && m.String() != "ctrl+c" {
+			return a, nil
+		}
 		return a.handleKey(m)
 
 	case tea.MouseMsg:
 		return a.handleMouse(m)
 
+	case startupReadyMsg:
+		return a.adoptStartup(m)
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		a.spin, cmd = a.spin.Update(m)
-		if a.loading {
+		// Keep the tick loop alive during the startup splash and any data load.
+		if a.splash || a.loading {
 			return a, cmd
 		}
 		return a, nil
@@ -1893,6 +1963,9 @@ func (a App) render() string {
 	if a.width == 0 || a.height == 0 {
 		return "starting kli…"
 	}
+	if a.splash {
+		return lipgloss.NewStyle().Padding(a.gutter, a.gutter).Render(a.splashView())
+	}
 
 	body := a.screenBody()
 
@@ -1922,6 +1995,23 @@ func (a App) render() string {
 	// Equal gutter on every side. Padding adds 2*gutter cols and rows back, so
 	// the result is exactly the full terminal size.
 	return lipgloss.NewStyle().Padding(a.gutter, a.gutter).Render(frame)
+}
+
+const kliLogo = `██   ██ ██    ██
+██  ██  ██    ██
+█████   ██    ██
+██  ██  ██    ██
+██   ██  ██████  `
+
+// splashView centers the logo, a spinner, and the creator credit while the
+// cluster connection and config load in the background.
+func (a App) splashView() string {
+	logo := a.theme.HeaderVal.Render(kliLogo)
+	w := lipgloss.Width(logo)
+	spin := lipgloss.PlaceHorizontal(w, lipgloss.Center, a.spin.View())
+	credit := lipgloss.PlaceHorizontal(w, lipgloss.Center, a.theme.Dim.Render(creatorHandle))
+	block := lipgloss.JoinVertical(lipgloss.Left, logo, "", spin, "", credit)
+	return lipgloss.Place(a.width, a.height, lipgloss.Center, lipgloss.Center, block)
 }
 
 // screenBody renders the active screen's body with no overlay. Overlays
