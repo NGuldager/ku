@@ -45,6 +45,8 @@ type keyMap struct {
 	// logs
 	Follow key.Binding
 	Wrap   key.Binding
+	Select key.Binding
+	Copy   key.Binding
 
 	// global
 	Help key.Binding
@@ -90,6 +92,8 @@ func defaultKeys() keyMap {
 
 		Follow: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "follow")),
 		Wrap:   key.NewBinding(key.WithKeys("w", "ctrl+w"), key.WithHelp("w/^w", "wrap lines")),
+		Select: key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "select lines")),
+		Copy:   key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy selection")),
 
 		Help: key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Back: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
@@ -109,7 +113,7 @@ func (k keyMap) groups() []helpGroup {
 		{"Actions", []key.Binding{k.Enter, k.Describe, k.YAML, k.Logs, k.DeployLogs, k.Edit, k.Shell, k.Restart, k.Trigger, k.Delete, k.Docs}},
 		{"Views", []key.Binding{k.Focus, k.Jump, k.Palette, k.Filter, k.Sort, k.Refresh, k.Wide, k.Command}},
 		{"Cluster", []key.Binding{k.Namespace, k.AllNS, k.Context}},
-		{"Logs", []key.Binding{k.Follow, k.Filter, k.Wrap}},
+		{"Logs", []key.Binding{k.Follow, k.Filter, k.Wrap, k.Select, k.Copy}},
 		{"General", []key.Binding{k.Help, k.Back, k.Quit}},
 	}
 }

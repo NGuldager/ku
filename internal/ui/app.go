@@ -610,7 +610,7 @@ func (a App) routeAux(msg tea.Msg) (tea.Model, tea.Cmd) {
 // single-key actions (command, docs) don't fire while the user is typing.
 func (a App) filterInput() bool {
 	return (a.screen == screenTable && a.table.filtering) ||
-		(a.screen == screenLogs && a.logs.filtering)
+		(a.screen == screenLogs && (a.logs.filtering || a.logs.selecting))
 }
 
 // --- key routing ------------------------------------------------------------
@@ -894,6 +894,38 @@ func (a App) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) updateLogs(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Visual selection captures movement and copy keys until it ends.
+	if a.logs.selecting {
+		switch {
+		case key.Matches(msg, a.keys.Back):
+			a.logs.stopSelect()
+		case key.Matches(msg, a.keys.Copy) || msg.String() == "enter":
+			text, n := a.logs.copySelection(), a.logs.selCount()
+			a.logs.stopSelect()
+			if text == "" {
+				return a, nil
+			}
+			a.setStatus("copied "+itoa(n)+" lines to clipboard", false)
+			return a, tea.SetClipboard(text)
+		case key.Matches(msg, a.keys.Up):
+			a.logs.moveSel(-1)
+		case key.Matches(msg, a.keys.Down):
+			a.logs.moveSel(1)
+		case key.Matches(msg, a.keys.PageUp):
+			a.logs.moveSel(-a.logs.vp.Height())
+		case key.Matches(msg, a.keys.PageDown):
+			a.logs.moveSel(a.logs.vp.Height())
+		case key.Matches(msg, a.keys.HalfUp):
+			a.logs.moveSel(-a.logs.vp.Height() / 2)
+		case key.Matches(msg, a.keys.HalfDown):
+			a.logs.moveSel(a.logs.vp.Height() / 2)
+		case key.Matches(msg, a.keys.Top):
+			a.logs.setSelCursor(0)
+		case key.Matches(msg, a.keys.Bottom):
+			a.logs.setSelCursor(len(a.logs.selLines) - 1)
+		}
+		return a, nil
+	}
 	// ctrl+w toggles wrap in any state, including while filtering where plain w
 	// is filter text.
 	if msg.String() == "ctrl+w" {
@@ -931,6 +963,9 @@ func (a App) updateLogs(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case key.Matches(msg, a.keys.Wrap):
 		a.logs.toggleWrap()
+		return a, nil
+	case key.Matches(msg, a.keys.Select):
+		a.logs.startSelect()
 		return a, nil
 	case key.Matches(msg, a.keys.Follow):
 		a.logs.follow = !a.logs.follow
@@ -1847,6 +1882,11 @@ func (a App) View() tea.View {
 	v := tea.NewView(a.render())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
+	// Release the mouse in the logs view so the terminal's own click-drag text
+	// selection and copy work there (keyboard scrolling still applies).
+	if a.screen == screenLogs && a.overlay == overlayNone {
+		v.MouseMode = tea.MouseModeNone
+	}
 	return v
 }
 
@@ -2098,7 +2138,10 @@ func (a App) hints() []hint {
 		}
 		return append(h, hint{"e", "edit"}, hint{"O", "docs"}, hint{"C", "cmd"}, hint{"esc", "back"})
 	case screenLogs:
-		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"/", "filter"}, {"w", "wrap"}, {"O", "docs"}, {"C", "cmd"}, {"esc", "back"}}
+		if a.logs.selecting {
+			return []hint{{"↑↓", "extend"}, {"y", "copy"}, {"esc", "cancel"}}
+		}
+		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"/", "filter"}, {"w", "wrap"}, {"v", "select"}, {"O", "docs"}, {"esc", "back"}}
 	case screenCockpit:
 		if a.focus == focusSidebar {
 			return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"C", "cmd"}, {"?", "help"}}

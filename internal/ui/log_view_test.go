@@ -102,6 +102,68 @@ func TestLogEventDrainsBufferedLinesInOneUpdate(t *testing.T) {
 	}
 }
 
+func TestLogSelectionCopiesMarkedRange(t *testing.T) {
+	l := newTestLogView()
+	for i := 0; i < 5; i++ {
+		l.appendLine("line-" + itoa(i))
+	}
+	l.startSelect()
+	if !l.selecting {
+		t.Fatal("startSelect should enter selection mode")
+	}
+	l.selAnchor = 1
+	l.setSelCursor(3)
+
+	if got, want := l.copySelection(), "line-1\nline-2\nline-3"; got != want {
+		t.Fatalf("copySelection = %q, want %q", got, want)
+	}
+	if l.selCount() != 3 {
+		t.Fatalf("selCount = %d, want 3", l.selCount())
+	}
+}
+
+func TestLogSelectionFlowCopiesAndExits(t *testing.T) {
+	app := App{client: &k8s.Client{}, theme: PickTheme("ansi"), keys: defaultKeys(), screen: screenLogs}
+	app.logs = newLogView(app.theme)
+	app.logs.setSize(70, 10)
+	for i := 0; i < 5; i++ {
+		app.logs.appendLine("l" + itoa(i))
+	}
+
+	m, _ := app.updateLogs(mkKey("v"))
+	a := m.(App)
+	if !a.logs.selecting {
+		t.Fatal("v should start selection")
+	}
+
+	m, cmd := a.updateLogs(mkKey("y"))
+	a = m.(App)
+	if a.logs.selecting {
+		t.Fatal("y should end selection")
+	}
+	if cmd == nil {
+		t.Fatal("y should produce a clipboard command")
+	}
+	if !strings.Contains(a.status, "copied") {
+		t.Fatalf("expected a copy status, got %q", a.status)
+	}
+}
+
+func TestLogSelectionEscCancels(t *testing.T) {
+	app := App{client: &k8s.Client{}, theme: PickTheme("ansi"), keys: defaultKeys(), screen: screenLogs}
+	app.logs = newLogView(app.theme)
+	app.logs.setSize(70, 10)
+	app.logs.appendLine("only line")
+
+	m, _ := app.updateLogs(mkKey("v"))
+	a := m.(App)
+	m, _ = a.updateLogs(mkKey("esc"))
+	a = m.(App)
+	if a.logs.selecting {
+		t.Fatal("esc should cancel selection")
+	}
+}
+
 func TestLogExpandsTabsToPreventOverflow(t *testing.T) {
 	l := newTestLogView()
 	l.appendLine("a\tb\tc")

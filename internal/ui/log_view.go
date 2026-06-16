@@ -11,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/bjarneo/kli/internal/k8s"
 )
@@ -45,6 +46,15 @@ type logView struct {
 	re        *regexp.Regexp
 	matched   int // lines currently shown
 	height    int // pane content height, retained so chrome changes can relayout
+
+	// Visual line selection: v marks a range to copy. While selecting, the view
+	// is frozen on a snapshot (selLines) and wrap is forced off so a line maps
+	// 1:1 to a row.
+	selecting     bool
+	selAnchor     int
+	selCursor     int
+	selLines      []string
+	wrapBeforeSel bool
 }
 
 func newLogView(th Theme) logView {
@@ -119,10 +129,95 @@ func (l *logView) storeLine(s string) {
 }
 
 // syncViewport pushes the current content into the viewport, sticking to the
-// tail while following.
+// tail while following. It is a no-op while selecting, so the view stays frozen
+// on the selection snapshot as new lines keep arriving.
 func (l *logView) syncViewport() {
+	if l.selecting {
+		return
+	}
 	l.vp.SetContent(l.content)
 	l.stickToBottom()
+}
+
+// --- visual selection -------------------------------------------------------
+
+// startSelect enters visual line selection, anchored at the top visible line.
+func (l *logView) startSelect() {
+	if l.content == "" {
+		return
+	}
+	l.selLines = strings.Split(l.content, "\n")
+	top := l.vp.YOffset()
+	if l.vp.SoftWrap { // YOffset counts wrapped rows; map it to a logical line
+		top = int(l.vp.ScrollPercent() * float64(len(l.selLines)-1))
+	}
+	l.wrapBeforeSel = l.vp.SoftWrap
+	l.vp.SoftWrap = false
+	l.selecting = true
+	l.follow = false
+	l.selAnchor = clamp(top, 0, len(l.selLines)-1)
+	l.selCursor = l.selAnchor
+	l.renderSelection()
+}
+
+// stopSelect leaves selection and restores the live, wrap-respecting view.
+func (l *logView) stopSelect() {
+	l.selecting = false
+	l.selLines = nil
+	l.vp.SoftWrap = l.wrapBeforeSel
+	l.syncViewport()
+}
+
+func (l *logView) moveSel(d int) { l.setSelCursor(l.selCursor + d) }
+func (l *logView) setSelCursor(i int) {
+	l.selCursor = clamp(i, 0, len(l.selLines)-1)
+	l.renderSelection()
+}
+
+// selRange is the inclusive [lo, hi] line range currently marked.
+func (l *logView) selRange() (int, int) {
+	if l.selAnchor <= l.selCursor {
+		return l.selAnchor, l.selCursor
+	}
+	return l.selCursor, l.selAnchor
+}
+
+func (l *logView) selCount() int { lo, hi := l.selRange(); return hi - lo + 1 }
+
+// renderSelection redraws the frozen snapshot with the marked range reversed,
+// keeping the cursor line in view.
+func (l *logView) renderSelection() {
+	lo, hi := l.selRange()
+	w := l.vp.Width()
+	var b strings.Builder
+	for i, ln := range l.selLines {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		if i >= lo && i <= hi {
+			b.WriteString(l.th.SelItemSel.Width(w).Render(truncate(ln, w)))
+		} else {
+			b.WriteString(ln)
+		}
+	}
+	l.vp.SetContent(b.String())
+	off, h := l.vp.YOffset(), l.vp.Height()
+	switch {
+	case l.selCursor < off:
+		l.vp.SetYOffset(l.selCursor)
+	case l.selCursor >= off+h:
+		l.vp.SetYOffset(l.selCursor - h + 1)
+	}
+}
+
+// copySelection returns the marked lines as plain text (ANSI stripped).
+func (l *logView) copySelection() string {
+	lo, hi := l.selRange()
+	rows := make([]string, 0, hi-lo+1)
+	for i := lo; i <= hi && i < len(l.selLines); i++ {
+		rows = append(rows, ansi.Strip(l.selLines[i]))
+	}
+	return strings.Join(rows, "\n")
 }
 
 // rebuildContent recomputes the joined view from scratch, applying the active
@@ -225,6 +320,9 @@ func (l logView) View() string {
 		mode = "nowrap"
 	}
 	right := l.th.Dim.Render(mode) + "  " + style.Render("● "+state)
+	if l.selecting {
+		right = l.th.HeaderVal.Render(fmt.Sprintf("● select %d", l.selCount()))
+	}
 	title := l.th.ModalTitle.Render(l.title)
 	header := spread(title, right, l.vp.Width())
 	if l.filtering || l.filterActive() {
