@@ -120,10 +120,25 @@ type logEvent struct {
 	done    bool
 }
 
+// crdsDiscoveredMsg carries the result of the sidebar's CRD discovery button.
+// client guards against a context switch landing a stale result.
+type crdsDiscoveredMsg struct {
+	client *k8s.Client
+	crds   []k8s.ResourceInfo
+}
+
 // --- commands ---------------------------------------------------------------
 
 func opCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), opTimeout)
+}
+
+func discoverCRDsCmd(cl *k8s.Client) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := opCtx()
+		defer cancel()
+		return crdsDiscoveredMsg{client: cl, crds: cl.DiscoverCRDs(ctx)}
+	}
 }
 
 func loadResourceCmd(cl *k8s.Client, seq int, res k8s.ResourceInfo, ns string) tea.Cmd {

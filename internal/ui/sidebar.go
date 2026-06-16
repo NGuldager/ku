@@ -1,9 +1,19 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/bjarneo/kli/internal/k8s"
+)
+
+// crdState tracks the CRD discovery button: not yet run, running, or done.
+type crdState int
+
+const (
+	crdNone crdState = iota
+	crdLoading
+	crdReady
 )
 
 type navCatItem struct{ label, query string }
@@ -51,15 +61,41 @@ func defaultNavCatalog() []navCatGroup {
 	}
 }
 
-// overviewKey marks the sidebar entry that opens the cockpit dashboard.
-const overviewKey = "~overview"
+// overviewKey marks the sidebar entry that opens the cockpit dashboard;
+// discoverKey marks the CRD discovery button.
+const (
+	overviewKey = "~overview"
+	discoverKey = "~discover"
+)
 
 type navEntry struct {
 	header   bool
 	overview bool
+	discover bool // the CRD discovery button at the bottom
 	label    string
 	res      k8s.ResourceInfo
 	key      string
+}
+
+// crdLabel is the sidebar label for a custom resource: its Kind when known
+// (e.g. "ScaledObject"), else the plural resource name.
+func crdLabel(ri k8s.ResourceInfo) string {
+	if ri.Kind != "" {
+		return ri.Kind
+	}
+	return ri.Resource
+}
+
+// crdButtonLabel is the discovery button's text for the current state.
+func crdButtonLabel(state crdState, n int) string {
+	switch state {
+	case crdLoading:
+		return "Discovering CRDs…"
+	case crdReady:
+		return fmt.Sprintf("Refresh CRDs (%d)", n)
+	default:
+		return "Discover CRDs"
+	}
 }
 
 // sidebar is the left navigation pane listing common resource kinds.
@@ -72,32 +108,52 @@ type sidebar struct {
 	height     int
 }
 
-func newSidebar(th Theme, reg *k8s.Registry, catalog []navCatGroup) sidebar {
+func newSidebar(th Theme, reg *k8s.Registry, catalog []navCatGroup, crds []k8s.ResourceInfo, state crdState) sidebar {
 	s := sidebar{th: th}
 
 	// The cockpit overview is the first, always-present entry.
-	s.selectable = append(s.selectable, len(s.entries))
-	s.entries = append(s.entries, navEntry{overview: true, label: "Overview", key: overviewKey})
+	s.add(navEntry{overview: true, label: "Overview", key: overviewKey})
 
 	for _, sec := range catalog {
 		var items []navEntry
 		for _, it := range sec.items {
-			ri, ok := reg.Resolve(it.query)
-			if !ok {
-				continue
+			if ri, ok := reg.Resolve(it.query); ok {
+				items = append(items, navEntry{label: it.label, res: ri, key: ri.Key()})
 			}
-			items = append(items, navEntry{label: it.label, res: ri, key: ri.Key()})
 		}
-		if len(items) == 0 {
-			continue
-		}
-		s.entries = append(s.entries, navEntry{header: true, label: sec.section})
-		for _, it := range items {
-			s.selectable = append(s.selectable, len(s.entries))
-			s.entries = append(s.entries, it)
-		}
+		s.addSection(sec.section, items)
 	}
+
+	// Discovered CRDs, populated on demand by the discovery button.
+	if len(crds) > 0 {
+		items := make([]navEntry, 0, len(crds))
+		for _, ri := range crds {
+			items = append(items, navEntry{label: crdLabel(ri), res: ri, key: ri.Key()})
+		}
+		s.addSection("CRDs", items)
+	}
+
+	// The discovery button always sits at the bottom of the nav.
+	s.add(navEntry{discover: true, label: crdButtonLabel(state, len(crds)), key: discoverKey})
 	return s
+}
+
+// add appends a selectable entry.
+func (s *sidebar) add(e navEntry) {
+	s.selectable = append(s.selectable, len(s.entries))
+	s.entries = append(s.entries, e)
+}
+
+// addSection appends a section header followed by its items. An empty section
+// is skipped.
+func (s *sidebar) addSection(title string, items []navEntry) {
+	if len(items) == 0 {
+		return
+	}
+	s.entries = append(s.entries, navEntry{header: true, label: title})
+	for _, it := range items {
+		s.add(it)
+	}
 }
 
 func (s *sidebar) setSize(w, h int) {
@@ -136,24 +192,66 @@ func (s *sidebar) current() (navEntry, bool) {
 	return s.entries[s.selectable[s.cursor]], true
 }
 
-func (s sidebar) visibleOffset() int {
-	curEntry := -1
+// pinnedButton returns the entry index of the bottom discovery button, or -1.
+// It is always the last entry when present, so it stays visible while the nav
+// entries above it scroll.
+func (s sidebar) pinnedButton() int {
+	if n := len(s.entries); n > 0 && s.entries[n-1].discover {
+		return n - 1
+	}
+	return -1
+}
+
+// navHeight is the rows available for scrollable nav entries; the pinned button
+// reserves the last row when present.
+func (s sidebar) navHeight() int {
+	if s.pinnedButton() >= 0 && s.height > 0 {
+		return s.height - 1
+	}
+	return s.height
+}
+
+// navLen is the number of scrollable entries (everything but the pinned button).
+func (s sidebar) navLen() int {
+	if b := s.pinnedButton(); b >= 0 {
+		return b
+	}
+	return len(s.entries)
+}
+
+// navOffset scrolls the nav region to keep the cursor visible, anchoring the
+// bottom of the list when the cursor sits on the pinned button.
+func (s sidebar) navOffset() int {
+	navLen, navH := s.navLen(), s.navHeight()
+	if navH <= 0 || navLen <= navH {
+		return 0
+	}
+	target := -1
 	if len(s.selectable) > 0 {
-		curEntry = s.selectable[s.cursor]
+		target = s.selectable[s.cursor]
 	}
-	if s.height > 0 && curEntry >= s.height {
-		return curEntry - s.height + 1
+	if target >= navLen { // cursor is on the pinned button
+		target = navLen - 1
 	}
-	return 0
+	if target < navH {
+		return 0
+	}
+	return clamp(target-navH+1, 0, navLen-navH)
 }
 
 func (s *sidebar) selectAt(y int) (navEntry, bool) {
 	if y < 0 || y >= s.height {
 		return navEntry{}, false
 	}
-	ei := s.visibleOffset() + y
-	if ei < 0 || ei >= len(s.entries) || s.entries[ei].header {
-		return navEntry{}, false
+	btn := s.pinnedButton()
+	var ei int
+	if btn >= 0 && y >= s.navHeight() {
+		ei = btn // the pinned button occupies the bottom row
+	} else {
+		ei = s.navOffset() + y
+		if ei >= s.navLen() || s.entries[ei].header {
+			return navEntry{}, false
+		}
 	}
 	for i, idx := range s.selectable {
 		if idx == ei {
@@ -176,36 +274,52 @@ func (s *sidebar) syncTo(key string) {
 }
 
 func (s sidebar) View(activeKey string, focused bool) string {
-	th := s.th
+	if s.height <= 0 {
+		return ""
+	}
 	curEntry := -1
 	if len(s.selectable) > 0 {
 		curEntry = s.selectable[s.cursor]
 	}
-	offset := s.visibleOffset()
+	navH := s.navHeight()
+	offset := s.navOffset()
 
-	var lines []string
-	for i := offset; i < len(s.entries) && len(lines) < s.height; i++ {
-		e := s.entries[i]
-		if e.header {
-			lines = append(lines, th.NavSection.Render(truncate(e.label, s.width)))
-			continue
-		}
-		marker := "  "
-		label := e.label
-		if e.key == activeKey {
-			marker = th.HeaderVal.Render("▸ ")
-			label = th.HeaderVal.Render(label)
-		} else {
-			label = th.SelItem.Render(label)
-		}
-		line := marker + label
-		if focused && i == curEntry {
-			line = th.SelItemSel.Width(s.width).Render("  " + truncate(e.label, s.width-2))
-		}
-		lines = append(lines, line)
+	lines := make([]string, 0, s.height)
+	for i := offset; i < s.navLen() && len(lines) < navH; i++ {
+		lines = append(lines, s.renderEntry(i, curEntry, activeKey, focused))
 	}
-	for len(lines) < s.height {
+	for len(lines) < navH {
 		lines = append(lines, "")
 	}
+	// The discovery button is pinned to the bottom row so it stays reachable no
+	// matter how many CRDs are listed above it.
+	if b := s.pinnedButton(); b >= 0 {
+		lines = append(lines, s.renderEntry(b, curEntry, activeKey, focused))
+	}
 	return strings.Join(lines, "\n")
+}
+
+// renderEntry renders one entry: a section header, or a selectable row with the
+// active/selected/discover styling.
+func (s sidebar) renderEntry(i, curEntry int, activeKey string, focused bool) string {
+	th := s.th
+	e := s.entries[i]
+	if e.header {
+		return th.NavSection.Render(truncate(e.label, s.width))
+	}
+	if focused && i == curEntry {
+		return th.SelItemSel.Width(s.width).Render("  " + truncate(e.label, s.width-2))
+	}
+	marker := "  "
+	label := e.label
+	switch {
+	case e.key == activeKey:
+		marker = th.HeaderVal.Render("▸ ")
+		label = th.HeaderVal.Render(label)
+	case e.discover:
+		label = th.FooterKey.Render(label) // accent so the button stands out
+	default:
+		label = th.SelItem.Render(label)
+	}
+	return marker + label
 }

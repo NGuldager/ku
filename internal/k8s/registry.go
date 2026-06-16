@@ -82,11 +82,46 @@ type Registry struct {
 	byKey map[string]ResourceInfo
 }
 
+// NewRegistry builds a registry from a set of resources, indexed and sorted.
+func NewRegistry(resources []ResourceInfo) *Registry {
+	reg := &Registry{byKey: make(map[string]ResourceInfo, len(resources))}
+	reg.Merge(resources)
+	return reg
+}
+
+// Merge folds resources into the registry, skipping any whose key is already
+// known, then re-sorts. Used to add on-demand discovery (CRDs) to the catalog
+// so they become searchable alongside the rest.
+func (reg *Registry) Merge(resources []ResourceInfo) {
+	if reg == nil {
+		return
+	}
+	added := false
+	for _, ri := range resources {
+		if _, exists := reg.byKey[ri.Key()]; exists {
+			continue
+		}
+		reg.add(ri)
+		added = true
+	}
+	if added {
+		sort.Slice(reg.all, func(i, j int) bool { return resourceLess(reg.all[i], reg.all[j]) })
+	}
+}
+
+// resourceLess orders resources by group, then resource name.
+func resourceLess(a, b ResourceInfo) bool {
+	if a.Group != b.Group {
+		return a.Group < b.Group
+	}
+	return a.Resource < b.Resource
+}
+
 // loadRegistry queries discovery for the server's preferred resources and
 // builds the catalog. It tolerates partial discovery failures.
 func (c *Client) loadRegistry() error {
 	lists, err := c.disco.ServerPreferredResources()
-	reg := &Registry{byKey: map[string]ResourceInfo{}}
+	var infos []ResourceInfo
 
 	for _, list := range lists {
 		if list == nil {
@@ -104,7 +139,7 @@ func (c *Client) loadRegistry() error {
 			if !canList(ar.Verbs) {
 				continue
 			}
-			ri := ResourceInfo{
+			infos = append(infos, ResourceInfo{
 				Group:      gv.Group,
 				Version:    gv.Version,
 				Resource:   ar.Name,
@@ -112,18 +147,11 @@ func (c *Client) loadRegistry() error {
 				Singular:   ar.SingularName,
 				ShortNames: ar.ShortNames,
 				Namespaced: ar.Namespaced,
-			}
-			reg.add(ri)
+			})
 		}
 	}
 
-	sort.Slice(reg.all, func(i, j int) bool {
-		if reg.all[i].Group != reg.all[j].Group {
-			return reg.all[i].Group < reg.all[j].Group
-		}
-		return reg.all[i].Resource < reg.all[j].Resource
-	})
-
+	reg := NewRegistry(infos)
 	if err != nil && len(reg.all) == 0 {
 		return err
 	}

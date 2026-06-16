@@ -68,6 +68,9 @@ type App struct {
 	keys   keyMap
 	navCat []navCatGroup // sidebar catalog (from config or built-in defaults)
 
+	crds     []k8s.ResourceInfo // CRDs surfaced by the sidebar discovery button
+	crdState crdState
+
 	width, height int // usable area, inside the outer gutter
 	gutter        int // equal padding (cells) on every side
 
@@ -119,7 +122,7 @@ func NewApp(cl *k8s.Client, th Theme, navCat []navCatGroup) App {
 		keys:   defaultKeys(),
 		navCat: navCat,
 	}
-	a.sidebar = newSidebar(th, cl.Registry(), navCat)
+	a.sidebar = newSidebar(th, cl.Registry(), navCat, a.crds, a.crdState)
 	a.cockpit = newCockpitView(th)
 	a.table = newTableView(th)
 	a.config = newConfigView(th)
@@ -361,6 +364,21 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		return a.adoptClient(m.client)
+
+	case crdsDiscoveredMsg:
+		if m.client != a.client {
+			return a, nil // a context switch landed first; ignore the stale result
+		}
+		a.client.Registry().Merge(m.crds) // make them searchable via the : jump
+		a.crds = m.crds
+		a.crdState = crdReady
+		a.rebuildSidebar()
+		if len(m.crds) == 0 {
+			a.setStatus("no CRDs found", false)
+		} else {
+			a.setStatus("discovered "+itoa(len(m.crds))+" CRDs", false)
+		}
+		return a, nil
 
 	case editReadyMsg:
 		if m.client != a.client {
@@ -1021,10 +1039,41 @@ func (a App) reloadCockpit() (tea.Model, tea.Cmd) {
 }
 
 func (a App) openNavEntry(e navEntry) (tea.Model, tea.Cmd) {
-	if e.overview {
+	switch {
+	case e.overview:
 		return a.switchToCockpit()
+	case e.discover:
+		return a.discoverCRDs()
+	default:
+		return a.switchResource(e.res)
 	}
-	return a.switchResource(e.res)
+}
+
+// discoverCRDs kicks off CRD discovery for the current cluster. The button
+// shows progress while the list call runs; the result arrives as a
+// crdsDiscoveredMsg.
+func (a App) discoverCRDs() (tea.Model, tea.Cmd) {
+	if a.crdState == crdLoading {
+		return a, nil // already in flight
+	}
+	a.crdState = crdLoading
+	a.rebuildSidebar()
+	a.setStatus("discovering CRDs…", false)
+	return a, discoverCRDsCmd(a.client)
+}
+
+// rebuildSidebar rebuilds the left nav from current state, keeping the cursor on
+// whatever entry was selected.
+func (a *App) rebuildSidebar() {
+	key := ""
+	if e, ok := a.sidebar.current(); ok {
+		key = e.key
+	}
+	a.sidebar = newSidebar(a.theme, a.client.Registry(), a.navCat, a.crds, a.crdState)
+	if key != "" {
+		a.sidebar.syncTo(key)
+	}
+	a.relayout() // a fresh sidebar starts at size 0; re-apply pane sizes
 }
 
 func (a App) openDetail() (tea.Model, tea.Cmd) {
@@ -1541,8 +1590,11 @@ func (a App) adoptClient(cl *k8s.Client) (tea.Model, tea.Cmd) {
 	a.logSession++
 	a.client = cl
 	// Rebuild the left nav from the new cluster's catalog: available resource
-	// kinds differ between clusters, so the previous sidebar may be stale.
-	a.sidebar = newSidebar(a.theme, cl.Registry(), a.navCat)
+	// kinds differ between clusters, so the previous sidebar (and any CRDs
+	// discovered on the old cluster) may be stale.
+	a.crds = nil
+	a.crdState = crdNone
+	a.sidebar = newSidebar(a.theme, cl.Registry(), a.navCat, a.crds, a.crdState)
 	a.namespace = cl.Namespace
 	a.lastNS = cl.Namespace
 	if a.lastNS == "" {
