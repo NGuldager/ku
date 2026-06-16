@@ -78,6 +78,19 @@ func TestLogFilterInvalidRegexIsForgiving(t *testing.T) {
 	}
 }
 
+func TestLogExpandsTabsToPreventOverflow(t *testing.T) {
+	l := newTestLogView()
+	l.appendLine("a\tb\tc")
+
+	if strings.Contains(l.lines[0], "\t") {
+		t.Fatalf("tabs should be expanded in stored log lines, got %q", l.lines[0])
+	}
+	// a at col 0, tabs advance to the next 8-column stop.
+	if l.lines[0] != "a       b       c" {
+		t.Fatalf("unexpected tab expansion: %q", l.lines[0])
+	}
+}
+
 func TestLogWrapDefaultsOnAndToggles(t *testing.T) {
 	l := newTestLogView()
 	if !l.vp.SoftWrap {

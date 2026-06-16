@@ -11,6 +11,34 @@ import (
 
 func itoa(n int) string { return strconv.Itoa(n) }
 
+const tabWidth = 8
+
+// expandTabs replaces tab characters with spaces up to the next 8-column tab
+// stop. Terminals draw a tab as a jump to the next stop, but width measuring
+// (ansi.StringWidth) counts it as zero, so an untreated tab makes a line measure
+// narrower than it renders and spill past its pane. Existing escape sequences
+// are preserved; only the column count is approximate for them, which at worst
+// shifts a tab stop but never causes overflow.
+func expandTabs(s string) string {
+	if !strings.Contains(s, "\t") {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + tabWidth)
+	col := 0
+	for _, r := range s {
+		if r == '\t' {
+			n := tabWidth - col%tabWidth
+			b.WriteString(strings.Repeat(" ", n))
+			col += n
+			continue
+		}
+		b.WriteRune(r)
+		col++
+	}
+	return b.String()
+}
+
 // newFilterInput builds the "/"-prompted text input shared by the table and
 // logs filters: same prompt and styling, only the placeholder differs.
 func newFilterInput(placeholder string) textinput.Model {

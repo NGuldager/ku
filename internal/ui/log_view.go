@@ -93,6 +93,7 @@ func (l *logView) stickToBottom() {
 }
 
 func (l *logView) appendLine(s string) {
+	s = expandTabs(s) // tabs measure as zero width and would spill past the pane
 	l.lines = append(l.lines, s)
 	switch {
 	case len(l.lines) > maxLogLines:
