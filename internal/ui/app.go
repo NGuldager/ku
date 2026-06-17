@@ -1034,6 +1034,17 @@ func (a App) updateLogs(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keys.Wrap):
 		a.logs.toggleWrap()
 		return a, nil
+	case key.Matches(msg, a.keys.CopyAll):
+		text := a.logs.copyAll()
+		if text == "" {
+			return a, nil
+		}
+		a.setStatus("copied "+itoa(len(a.logs.lines))+" lines to clipboard", false)
+		return a, tea.SetClipboard(text)
+	case key.Matches(msg, a.keys.Clear):
+		a.logs.clear()
+		a.setStatus("cleared logs", false)
+		return a, nil
 	case key.Matches(msg, a.keys.Select):
 		a.logs.startSelect()
 		return a, nil
@@ -2294,7 +2305,7 @@ func (a App) hints() []hint {
 		case a.logs.selecting:
 			return []hint{{"↑↓", "move"}, {"m", "mark"}, {"y", "copy"}, {"esc", "cancel"}}
 		}
-		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"/", "filter"}, {"w", "wrap"}, {"v", "select"}, {"O", "docs"}, {"esc", "back"}}
+		return []hint{{"↑↓", "scroll"}, {"f", "follow"}, {"/", "filter"}, {"w", "wrap"}, {"v", "select"}, {"c", "copy"}, {"^l", "clear"}, {"O", "docs"}, {"esc", "back"}}
 	case screenCockpit:
 		if a.focus == focusSidebar {
 			return []hint{{"↑↓", "pick"}, {"enter", "open"}, {"tab", "table"}, {":", "jump"}, {"C", "cmd"}, {"?", "help"}}
