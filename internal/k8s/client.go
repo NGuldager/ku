@@ -43,20 +43,11 @@ type Client struct {
 // contextOverride is non-empty it selects that context instead of the
 // kubeconfig's current-context.
 func NewClient(contextOverride, kubeconfigPath string) (*Client, error) {
-	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if kubeconfigPath != "" {
-		rules.ExplicitPath = kubeconfigPath
-	}
-	overrides := &clientcmd.ConfigOverrides{}
-	if contextOverride != "" {
-		overrides.CurrentContext = contextOverride
-	}
-	cc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides)
-
-	restCfg, err := cc.ClientConfig()
+	cc, restCfg, err := loadClientConfig(contextOverride, kubeconfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("load kubeconfig: %w", err)
+		return nil, err
 	}
+
 	// Be responsive: the TUI fires frequent list calls on refresh.
 	restCfg.QPS = 50
 	restCfg.Burst = 100
@@ -120,6 +111,38 @@ func NewClient(contextOverride, kubeconfigPath string) (*Client, error) {
 		c.DiscoveryWarning = discoveryWarning(err)
 	}
 	return c, nil
+}
+
+// ValidateKubeconfig checks local kubeconfig loading without connecting to the
+// API server. It lets startup fail before the terminal UI sends feature probes.
+func ValidateKubeconfig(contextOverride, kubeconfigPath string) error {
+	_, _, err := loadClientConfig(contextOverride, kubeconfigPath)
+	return err
+}
+
+func loadClientConfig(contextOverride, kubeconfigPath string) (clientcmd.ClientConfig, *rest.Config, error) {
+	rules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if kubeconfigPath != "" {
+		rules.ExplicitPath = kubeconfigPath
+	}
+	overrides := &clientcmd.ConfigOverrides{}
+	if contextOverride != "" {
+		overrides.CurrentContext = contextOverride
+	}
+	cc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides)
+
+	restCfg, err := cc.ClientConfig()
+	if err != nil {
+		return nil, nil, kubeconfigError(err)
+	}
+	return cc, restCfg, nil
+}
+
+func kubeconfigError(err error) error {
+	if clientcmd.IsEmptyConfig(err) {
+		return errors.New("kubeconfig is empty or missing; set KUBECONFIG, pass --kubeconfig, or create ~/.kube/config")
+	}
+	return fmt.Errorf("load kubeconfig: %w", err)
 }
 
 // discoveryWarning summarizes a partial-discovery error for the status line.

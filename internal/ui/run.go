@@ -5,6 +5,8 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/bjarneo/ku/internal/k8s"
 )
 
 // Options configures a ku session.
@@ -24,6 +26,19 @@ type Options struct {
 // take precedence over the remembered context/namespace from the last session.
 func Run(opts Options) error {
 	saved, hasSaved := loadState()
+	ctxName := opts.Context
+	if ctxName == "" && hasSaved {
+		ctxName = saved.Context
+	}
+	if err := k8s.ValidateKubeconfig(ctxName, opts.Kubeconfig); err != nil {
+		if opts.Context != "" || ctxName == "" {
+			return err
+		}
+		if err := k8s.ValidateKubeconfig("", opts.Kubeconfig); err != nil {
+			return err
+		}
+	}
+
 	// Theme precedence: --theme flag, then $KU_THEME, then the remembered choice.
 	name := opts.Theme
 	if name == "" {
