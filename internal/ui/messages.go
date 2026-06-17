@@ -81,6 +81,7 @@ type workloadSelectorMsg struct {
 	ns       string
 	desc     string // workload label for the status line, e.g. "deployments/api"
 	selector string
+	origin   target // the workload list to return to on back
 	err      error
 }
 
@@ -331,20 +332,20 @@ func deploymentLogsCmd(cl *k8s.Client, ns, name string) tea.Cmd {
 	}
 }
 
-func workloadSelectorCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string) tea.Cmd {
+func workloadSelectorCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string, origin target) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := opCtx()
 		defer cancel()
 		desc := res.Resource + "/" + name
 		sel, err := cl.WorkloadPodSelector(ctx, res, ns, name)
 		if err != nil {
-			return workloadSelectorMsg{ns: ns, desc: desc, err: err}
+			return workloadSelectorMsg{ns: ns, desc: desc, origin: origin, err: err}
 		}
 		pods, ok := cl.Registry().Resolve("pods")
 		if !ok {
-			return workloadSelectorMsg{ns: ns, desc: desc, err: fmt.Errorf("pods resource not found")}
+			return workloadSelectorMsg{ns: ns, desc: desc, origin: origin, err: fmt.Errorf("pods resource not found")}
 		}
-		return workloadSelectorMsg{podsRes: pods, ns: ns, desc: desc, selector: sel}
+		return workloadSelectorMsg{podsRes: pods, ns: ns, desc: desc, selector: sel, origin: origin}
 	}
 }
 

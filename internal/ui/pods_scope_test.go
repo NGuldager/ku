@@ -58,12 +58,14 @@ func TestPodsKeyRequiresWorkload(t *testing.T) {
 func TestOpenScopedPodsSwitchesAndScopes(t *testing.T) {
 	app := deploymentsApp()
 	podsRes := k8s.ResourceInfo{Resource: "pods", Kind: "Pod", Namespaced: true}
+	origin := target{res: app.res, ns: "", name: "api"}
 
 	model, cmd := app.openScopedPods(workloadSelectorMsg{
 		podsRes:  podsRes,
 		ns:       "prod",
 		desc:     "deployments/api",
 		selector: "app=api",
+		origin:   origin,
 	})
 	got := model.(App)
 	if cmd == nil {
@@ -77,6 +79,102 @@ func TestOpenScopedPodsSwitchesAndScopes(t *testing.T) {
 	}
 	if got.scope.selector != "app=api" || got.scope.desc != "deployments/api" {
 		t.Fatalf("scope = %+v, want app=api / deployments/api", got.scope)
+	}
+	if got.scope.origin.name != "api" || !got.scope.origin.res.IsDeployment() {
+		t.Fatalf("scope.origin = %+v, want the deployments/api workload", got.scope.origin)
+	}
+}
+
+func TestExitScopeReturnsToWorkload(t *testing.T) {
+	app := deploymentsApp()
+	app.res = k8s.ResourceInfo{Resource: "pods", Kind: "Pod", Namespaced: true}
+	app.namespace = "prod"
+	app.scope = podScope{
+		selector: "app=api",
+		desc:     "deployments/api",
+		origin:   target{res: k8s.ResourceInfo{Group: "apps", Resource: "deployments", Kind: "Deployment", Namespaced: true}, ns: "default", name: "api"},
+	}
+
+	model, cmd := app.exitScope()
+	got := model.(App)
+	if cmd == nil {
+		t.Fatal("exitScope returned nil command")
+	}
+	if !got.res.IsDeployment() {
+		t.Fatalf("res = %+v, want deployments (the origin)", got.res)
+	}
+	if got.namespace != "default" {
+		t.Fatalf("namespace = %q, want default (the origin's list namespace)", got.namespace)
+	}
+	if got.scope.selector != "" {
+		t.Fatalf("scope.selector = %q, want cleared after exit", got.scope.selector)
+	}
+	if got.pendingSelect.name != "api" {
+		t.Fatalf("pendingSelect.name = %q, want api (re-select the workload)", got.pendingSelect.name)
+	}
+}
+
+func TestBackExitsScopeOnTable(t *testing.T) {
+	app := deploymentsApp()
+	app.res = k8s.ResourceInfo{Resource: "pods", Kind: "Pod", Namespaced: true}
+	app.scope = podScope{
+		selector: "app=api",
+		origin:   target{res: k8s.ResourceInfo{Group: "apps", Resource: "deployments", Kind: "Deployment", Namespaced: true}, ns: "default", name: "api"},
+	}
+
+	model, _ := app.updateTable(mkKey("esc"))
+	got := model.(App)
+	if !got.res.IsDeployment() {
+		t.Fatalf("res = %+v, want deployments after esc", got.res)
+	}
+	if got.scope.selector != "" {
+		t.Fatalf("scope.selector = %q, want cleared after esc", got.scope.selector)
+	}
+}
+
+func TestBackClearsFilterBeforeExitingScope(t *testing.T) {
+	app := deploymentsApp()
+	app.res = k8s.ResourceInfo{Resource: "pods", Kind: "Pod", Namespaced: true}
+	app.scope = podScope{selector: "app=api", origin: target{res: app.res, ns: "default", name: "api"}}
+	app.table.startFilter()
+	app.table.filter.SetValue("foo")
+
+	model, _ := app.updateTable(mkKey("esc"))
+	got := model.(App)
+	if got.scope.selector == "" {
+		t.Fatal("first esc exited the scope; it should clear the filter first")
+	}
+	if got.table.filterActive() {
+		t.Fatal("first esc did not clear the active filter")
+	}
+}
+
+func TestResourcesLoadedAppliesPendingSelect(t *testing.T) {
+	app := deploymentsApp()
+	app.loadSeq = 5
+	app.pendingSelect = target{name: "api"}
+
+	msg := resourcesLoadedMsg{
+		client: app.client,
+		seq:    5,
+		res:    app.res,
+		ns:     app.namespace,
+		tbl: &k8s.Table{
+			Columns: []k8s.Column{{Name: "Name"}},
+			Rows: []k8s.Row{
+				{Namespace: "default", Name: "web", Cells: []string{"web"}},
+				{Namespace: "default", Name: "api", Cells: []string{"api"}},
+			},
+		},
+	}
+	model, _ := app.Update(msg)
+	got := model.(App)
+	row, ok := got.table.selected()
+	if !ok || row.Name != "api" {
+		t.Fatalf("selected row = %+v ok=%t, want api", row, ok)
+	}
+	if got.pendingSelect.name != "" {
+		t.Fatalf("pendingSelect = %+v, want cleared after applying", got.pendingSelect)
 	}
 }
 

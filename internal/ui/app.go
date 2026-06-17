@@ -67,6 +67,7 @@ type target struct {
 type podScope struct {
 	selector string // label selector; "" means unscoped
 	desc     string // workload label for the status line, e.g. "deployments/api"
+	origin   target // the workload list to return to on back (res + list namespace + name)
 }
 
 // App is the root Bubble Tea model.
@@ -96,6 +97,10 @@ type App struct {
 	namespace string   // "" means all namespaces
 	lastNS    string   // remembered specific namespace for the all-ns toggle
 	scope     podScope // active pods-for-workload filter, if any
+
+	// pendingSelect names a row to highlight once the next resource list loads
+	// (used when returning to a workload list from a scoped pods view).
+	pendingSelect target
 
 	screen  screen
 	focus   focusKind
@@ -384,6 +389,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.setStatus(trimErr(m.err), true)
 			} else {
 				a.table.setData(m.tbl)
+				if a.pendingSelect.name != "" {
+					a.table.selectRow(a.pendingSelect.ns, a.pendingSelect.name)
+					a.pendingSelect = target{}
+				}
 				a.clearStatus()
 			}
 		}
@@ -849,10 +858,14 @@ func (a App) updateTable(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.logs.stop()
 		return a, tea.Quit
 	case key.Matches(msg, a.keys.Back):
-		// esc clears an applied filter; otherwise it is a no-op on the table.
-		if a.table.filterActive() {
+		// esc clears an applied filter first; with a workload scope and no filter,
+		// it returns to the workload list. Otherwise it is a no-op on the table.
+		switch {
+		case a.table.filterActive():
 			a.table.stopFilter(true)
 			a.setStatus("filter cleared", false)
+		case a.scope.selector != "":
+			return a.exitScope()
 		}
 		return a, nil
 	case key.Matches(msg, a.keys.Help):
@@ -1886,15 +1899,22 @@ func (a App) openDrain() (tea.Model, tea.Cmd) {
 // the pods list scoped to it. The selector lookup is a live API call, so it runs
 // as a command and the switch happens in openScopedPods once it returns.
 func (a App) openPodsForWorkload() (tea.Model, tea.Cmd) {
-	if !a.res.HasPodSelector() {
-		a.setStatus("pods: select a deployment, statefulset, daemonset, replicaset, or job", true)
-		return a, nil
-	}
 	row, ok := a.table.selected()
 	if !ok {
 		return a, nil
 	}
-	ns := row.Namespace
+	return a.openPodsForWorkloadTarget(target{res: a.res, ns: row.Namespace, name: row.Name})
+}
+
+func (a App) openPodsForWorkloadTarget(t target) (tea.Model, tea.Cmd) {
+	if t.name == "" {
+		return a, nil
+	}
+	if !t.res.HasPodSelector() {
+		a.setStatus("pods: only deployments, statefulsets, daemonsets, replicasets, and jobs have pods", true)
+		return a, nil
+	}
+	ns := t.ns
 	if ns == "" {
 		ns = a.namespace
 	}
@@ -1902,8 +1922,11 @@ func (a App) openPodsForWorkload() (tea.Model, tea.Cmd) {
 		a.setStatus("pods: workload namespace unavailable", true)
 		return a, nil
 	}
-	a.setStatus("loading pods for "+qualified(ns, row.Name), false)
-	return a, workloadSelectorCmd(a.client, a.res, ns, row.Name)
+	// Remember the list to return to on back: the workload resource, the namespace
+	// context the list was showing (a.namespace, possibly all-ns), and the row.
+	origin := target{res: t.res, ns: a.namespace, name: t.name}
+	a.setStatus("loading pods for "+qualified(ns, t.name), false)
+	return a, workloadSelectorCmd(a.client, t.res, ns, t.name, origin)
 }
 
 // openScopedPods switches to the pods list filtered by a workload's selector,
@@ -1916,8 +1939,18 @@ func (a App) openScopedPods(m workloadSelectorMsg) (tea.Model, tea.Cmd) {
 	}
 	a.useResource(m.podsRes) // clears any prior scope/filter/sort
 	a.namespace = m.ns
-	a.scope = podScope{selector: m.selector, desc: m.desc}
+	a.scope = podScope{selector: m.selector, desc: m.desc, origin: m.origin}
 	a.setStatus("pods for "+m.desc, false)
+	return a.reload()
+}
+
+// exitScope leaves a scoped pods view and returns to the workload list it was
+// opened from, restoring that list's namespace and re-selecting the workload.
+func (a App) exitScope() (tea.Model, tea.Cmd) {
+	origin := a.scope.origin
+	a.useResource(origin.res) // clears the scope
+	a.namespace = origin.ns
+	a.pendingSelect = target{name: origin.name} // re-select by name once the list loads
 	return a.reload()
 }
 
