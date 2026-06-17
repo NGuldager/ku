@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -24,6 +25,7 @@ type Row struct {
 	Cells     []string
 	Name      string
 	Namespace string
+	Dimmed    bool
 }
 
 // Table is the rendered, server-side-printed view of a resource list.
@@ -80,7 +82,7 @@ func (c *Client) ListTable(ctx context.Context, res ResourceInfo, namespace stri
 	}
 
 	showNS := res.Namespaced && namespace == ""
-	return convertTable(mt, showNS), nil
+	return convertTable(mt, res, showNS), nil
 }
 
 func decodeTable(raw []byte, resource string) (*metav1.Table, error) {
@@ -94,7 +96,7 @@ func decodeTable(raw []byte, resource string) (*metav1.Table, error) {
 	return &mt, nil
 }
 
-func convertTable(mt *metav1.Table, showNS bool) *Table {
+func convertTable(mt *metav1.Table, res ResourceInfo, showNS bool) *Table {
 	t := &Table{}
 
 	if showNS {
@@ -104,6 +106,15 @@ func convertTable(mt *metav1.Table, showNS bool) *Table {
 		t.Columns = append(t.Columns, Column{Name: cd.Name, Priority: int(cd.Priority)})
 	}
 
+	statusCol := -1
+	if res.IsPod() {
+		for i, c := range t.Columns {
+			if strings.EqualFold(c.Name, "Status") {
+				statusCol = i
+				break
+			}
+		}
+	}
 	for i := range mt.Rows {
 		r := &mt.Rows[i]
 		var name, ns string
@@ -126,6 +137,10 @@ func convertTable(mt *metav1.Table, showNS bool) *Table {
 		row := Row{Cells: cells, Name: name, Namespace: ns}
 		if row.Name == "" && len(r.Cells) > 0 {
 			row.Name = cellToString(r.Cells[0])
+		}
+		if statusCol >= 0 && statusCol < len(row.Cells) &&
+			strings.EqualFold(strings.TrimSpace(row.Cells[statusCol]), "Completed") {
+			row.Dimmed = true
 		}
 		t.Rows = append(t.Rows, row)
 	}

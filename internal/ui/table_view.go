@@ -504,6 +504,8 @@ func (v tableView) renderRow(row k8s.Row, selected bool) string {
 		txt := cellFit(val, cs.width)
 		if selected {
 			b.WriteString(" " + txt + " ") // colored later via the whole-row highlight
+		} else if row.Dimmed {
+			b.WriteString(" " + v.th.Dim.Render(txt) + " ")
 		} else {
 			b.WriteString(" " + styleCell(v.th, v.cols[ci].Name, val).Render(txt) + " ")
 		}
