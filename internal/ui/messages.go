@@ -81,7 +81,7 @@ type workloadSelectorMsg struct {
 	ns       string
 	desc     string // workload label for the status line, e.g. "deployments/api"
 	selector string
-	origin   target // the workload list to return to on back
+	origin   scopeOrigin // where the scope was opened from, for back navigation
 	err      error
 }
 
@@ -332,7 +332,7 @@ func deploymentLogsCmd(cl *k8s.Client, ns, name string) tea.Cmd {
 	}
 }
 
-func workloadSelectorCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string, origin target) tea.Cmd {
+func workloadSelectorCmd(cl *k8s.Client, res k8s.ResourceInfo, ns, name string, origin scopeOrigin) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := opCtx()
 		defer cancel()

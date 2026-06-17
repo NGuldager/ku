@@ -58,7 +58,7 @@ func TestPodsKeyRequiresWorkload(t *testing.T) {
 func TestOpenScopedPodsSwitchesAndScopes(t *testing.T) {
 	app := deploymentsApp()
 	podsRes := k8s.ResourceInfo{Resource: "pods", Kind: "Pod", Namespaced: true}
-	origin := target{res: app.res, ns: "", name: "api"}
+	origin := scopeOrigin{screen: screenTable, listNS: "", workload: target{res: app.res, ns: "prod", name: "api"}}
 
 	model, cmd := app.openScopedPods(workloadSelectorMsg{
 		podsRes:  podsRes,
@@ -80,7 +80,7 @@ func TestOpenScopedPodsSwitchesAndScopes(t *testing.T) {
 	if got.scope.selector != "app=api" || got.scope.desc != "deployments/api" {
 		t.Fatalf("scope = %+v, want app=api / deployments/api", got.scope)
 	}
-	if got.scope.origin.name != "api" || !got.scope.origin.res.IsDeployment() {
+	if got.scope.origin.workload.name != "api" || !got.scope.origin.workload.res.IsDeployment() {
 		t.Fatalf("scope.origin = %+v, want the deployments/api workload", got.scope.origin)
 	}
 }
@@ -92,13 +92,20 @@ func TestExitScopeReturnsToWorkload(t *testing.T) {
 	app.scope = podScope{
 		selector: "app=api",
 		desc:     "deployments/api",
-		origin:   target{res: k8s.ResourceInfo{Group: "apps", Resource: "deployments", Kind: "Deployment", Namespaced: true}, ns: "default", name: "api"},
+		origin: scopeOrigin{
+			screen:   screenTable,
+			listNS:   "default",
+			workload: target{res: k8s.ResourceInfo{Group: "apps", Resource: "deployments", Kind: "Deployment", Namespaced: true}, ns: "default", name: "api"},
+		},
 	}
 
 	model, cmd := app.exitScope()
 	got := model.(App)
 	if cmd == nil {
 		t.Fatal("exitScope returned nil command")
+	}
+	if got.screen != screenTable {
+		t.Fatalf("screen = %v, want screenTable (table origin)", got.screen)
 	}
 	if !got.res.IsDeployment() {
 		t.Fatalf("res = %+v, want deployments (the origin)", got.res)
@@ -114,12 +121,90 @@ func TestExitScopeReturnsToWorkload(t *testing.T) {
 	}
 }
 
+func TestExitScopeReturnsToConfigView(t *testing.T) {
+	app := deploymentsApp()
+	app.res = k8s.ResourceInfo{Resource: "pods", Kind: "Pod", Namespaced: true}
+	app.namespace = "prod"
+	deployRes := k8s.ResourceInfo{Group: "apps", Resource: "deployments", Kind: "Deployment", Namespaced: true}
+	app.scope = podScope{
+		selector: "app=api",
+		desc:     "deployments/api",
+		origin: scopeOrigin{
+			screen:   screenConfig,
+			listNS:   "default",
+			workload: target{res: deployRes, ns: "default", name: "api"},
+		},
+	}
+
+	model, cmd := app.exitScope()
+	got := model.(App)
+	if cmd == nil {
+		t.Fatal("exitScope returned nil command (config reload)")
+	}
+	if got.screen != screenConfig {
+		t.Fatalf("screen = %v, want screenConfig (return to the view p was pressed from)", got.screen)
+	}
+	if !got.configTarget.res.IsDeployment() || got.configTarget.name != "api" {
+		t.Fatalf("configTarget = %+v, want the deployments/api workload", got.configTarget)
+	}
+	// Underlying list identity is restored so a later esc lands on the workload list.
+	if !got.res.IsDeployment() || got.namespace != "default" {
+		t.Fatalf("res/ns = %+v/%q, want deployments/default behind the config view", got.res, got.namespace)
+	}
+	if !got.pendingListReload {
+		t.Fatal("pendingListReload = false, want true (reload the list when config closes)")
+	}
+	if got.pendingSelect.name != "api" {
+		t.Fatalf("pendingSelect.name = %q, want api", got.pendingSelect.name)
+	}
+}
+
+func TestInspectBackReloadsListWhenFlagged(t *testing.T) {
+	app := deploymentsApp()
+	app.screen = screenConfig
+	app.pendingListReload = true
+	app.pendingSelect = target{name: "api"}
+
+	model, cmd := app.updateConfig(mkKey("esc"))
+	got := model.(App)
+	if got.screen != screenTable {
+		t.Fatalf("screen = %v, want screenTable after back", got.screen)
+	}
+	if cmd == nil {
+		t.Fatal("back returned nil command; want a list reload")
+	}
+	if got.pendingListReload {
+		t.Fatal("pendingListReload still set after back")
+	}
+	if got.pendingSelect.name != "api" {
+		t.Fatalf("pendingSelect.name = %q, want api preserved until the list loads", got.pendingSelect.name)
+	}
+}
+
+func TestInspectBackNoReloadWhenNotFlagged(t *testing.T) {
+	app := deploymentsApp()
+	app.screen = screenDetail
+
+	model, cmd := app.updateDetail(mkKey("esc"))
+	got := model.(App)
+	if got.screen != screenTable {
+		t.Fatalf("screen = %v, want screenTable after back", got.screen)
+	}
+	if cmd != nil {
+		t.Fatal("back returned a command without a pending reload")
+	}
+}
+
 func TestBackExitsScopeOnTable(t *testing.T) {
 	app := deploymentsApp()
 	app.res = k8s.ResourceInfo{Resource: "pods", Kind: "Pod", Namespaced: true}
 	app.scope = podScope{
 		selector: "app=api",
-		origin:   target{res: k8s.ResourceInfo{Group: "apps", Resource: "deployments", Kind: "Deployment", Namespaced: true}, ns: "default", name: "api"},
+		origin: scopeOrigin{
+			screen:   screenTable,
+			listNS:   "default",
+			workload: target{res: k8s.ResourceInfo{Group: "apps", Resource: "deployments", Kind: "Deployment", Namespaced: true}, ns: "default", name: "api"},
+		},
 	}
 
 	model, _ := app.updateTable(mkKey("esc"))
@@ -135,7 +220,7 @@ func TestBackExitsScopeOnTable(t *testing.T) {
 func TestBackClearsFilterBeforeExitingScope(t *testing.T) {
 	app := deploymentsApp()
 	app.res = k8s.ResourceInfo{Resource: "pods", Kind: "Pod", Namespaced: true}
-	app.scope = podScope{selector: "app=api", origin: target{res: app.res, ns: "default", name: "api"}}
+	app.scope = podScope{selector: "app=api", origin: scopeOrigin{screen: screenTable, listNS: "default", workload: target{res: app.res, ns: "default", name: "api"}}}
 	app.table.startFilter()
 	app.table.filter.SetValue("foo")
 

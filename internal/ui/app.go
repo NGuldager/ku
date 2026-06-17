@@ -65,9 +65,18 @@ type target struct {
 // jumping from a workload to its pods and cleared on any other resource or
 // namespace change.
 type podScope struct {
-	selector string // label selector; "" means unscoped
-	desc     string // workload label for the status line, e.g. "deployments/api"
-	origin   target // the workload list to return to on back (res + list namespace + name)
+	selector string      // label selector; "" means unscoped
+	desc     string      // workload label for the status line, e.g. "deployments/api"
+	origin   scopeOrigin // where the scope was entered from, for back navigation
+}
+
+// scopeOrigin records where a pods scope was opened from, so back navigation can
+// return there faithfully: to the workload list, or to the config/describe view
+// of the workload (with the list restored behind it).
+type scopeOrigin struct {
+	screen   screen // the screen p was pressed from (table, config, or detail)
+	listNS   string // the namespace context of the underlying workload list
+	workload target // the workload itself: res + its own namespace + name
 }
 
 // App is the root Bubble Tea model.
@@ -101,6 +110,10 @@ type App struct {
 	// pendingSelect names a row to highlight once the next resource list loads
 	// (used when returning to a workload list from a scoped pods view).
 	pendingSelect target
+	// pendingListReload requests a workload-list reload the next time the config
+	// or describe view is exited, used when back navigation lands on those views
+	// with the underlying list cleared by the pods drill-down.
+	pendingListReload bool
 
 	screen  screen
 	focus   focusKind
@@ -989,11 +1002,21 @@ func (a App) updateMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// backFromInspect leaves the config/describe view for the table, reloading the
+// workload list first when a pods drill-down cleared it (see exitScope).
+func (a App) backFromInspect() (tea.Model, tea.Cmd) {
+	a.screen = screenTable
+	if a.pendingListReload {
+		a.pendingListReload = false
+		return a.reload()
+	}
+	return a, nil
+}
+
 func (a App) updateConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keys.Back) || msg.String() == "q":
-		a.screen = screenTable
-		return a, nil
+		return a.backFromInspect()
 	case key.Matches(msg, a.keys.Describe, a.keys.YAML):
 		return a.openDetailTarget(a.configTarget)
 	case key.Matches(msg, a.keys.Edit):
@@ -1020,8 +1043,7 @@ func (a App) updateConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (a App) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keys.Back) || msg.String() == "q":
-		a.screen = screenTable
-		return a, nil
+		return a.backFromInspect()
 	case key.Matches(msg, a.keys.Enter):
 		return a.openConfigTarget(a.detailTarget)
 	case key.Matches(msg, a.keys.Edit):
@@ -1261,6 +1283,7 @@ func (a *App) useResource(ri k8s.ResourceInfo) {
 	a.screen = screenTable
 	a.focus = focusMain
 	a.scope = podScope{} // any explicit resource switch drops the workload scope
+	a.pendingListReload = false
 	a.sidebar.syncTo(ri.Key())
 	a.table.stopFilter(true)
 	a.table.resetSort()    // columns differ per resource
@@ -1926,9 +1949,14 @@ func (a App) openPodsForWorkloadTarget(t target) (tea.Model, tea.Cmd) {
 		a.setStatus("pods: workload namespace unavailable", true)
 		return a, nil
 	}
-	// Remember the list to return to on back: the workload resource, the namespace
-	// context the list was showing (a.namespace, possibly all-ns), and the row.
-	origin := target{res: t.res, ns: a.namespace, name: t.name}
+	// Remember where to return on back: the screen, the namespace context the
+	// workload list was showing (a.namespace, possibly all-ns), and the workload
+	// itself (resolved to its own namespace) for re-opening config/describe.
+	origin := scopeOrigin{
+		screen:   a.screen,
+		listNS:   a.namespace,
+		workload: target{res: t.res, ns: ns, name: t.name},
+	}
 	a.setStatus("loading pods for "+qualified(ns, t.name), false)
 	return a, workloadSelectorCmd(a.client, t.res, ns, t.name, origin)
 }
@@ -1948,14 +1976,25 @@ func (a App) openScopedPods(m workloadSelectorMsg) (tea.Model, tea.Cmd) {
 	return a.reload()
 }
 
-// exitScope leaves a scoped pods view and returns to the workload list it was
-// opened from, restoring that list's namespace and re-selecting the workload.
+// exitScope leaves a scoped pods view and returns to where the scope was opened
+// from. In every case the underlying workload list is restored (its namespace
+// and selected row); when the scope was opened from the config or describe view,
+// that view is re-opened on top and the list reload is deferred until it closes.
 func (a App) exitScope() (tea.Model, tea.Cmd) {
-	origin := a.scope.origin
-	a.useResource(origin.res) // clears the scope
-	a.namespace = origin.ns
-	a.pendingSelect = target{name: origin.name} // re-select by name once the list loads
-	return a.reload()
+	o := a.scope.origin
+	a.useResource(o.workload.res) // clears the scope and the pods table
+	a.namespace = o.listNS
+	a.pendingSelect = target{name: o.workload.name} // re-select once the list loads
+	switch o.screen {
+	case screenConfig:
+		a.pendingListReload = true
+		return a.openConfigTarget(o.workload)
+	case screenDetail:
+		a.pendingListReload = true
+		return a.openDetailTarget(o.workload)
+	default:
+		return a.reload()
+	}
 }
 
 func (a App) openTriggerJobTarget(t target) (tea.Model, tea.Cmd) {
