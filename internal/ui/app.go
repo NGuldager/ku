@@ -2267,6 +2267,15 @@ func (a App) headerView() string {
 		left += "  " + c
 	}
 
+	// A small spinner blinks in place at the right edge while a load runs. Added
+	// after the chip layout (so it never reflows the chips) and with no label, so
+	// a routine 2s refresh is a quiet in-place blink, not a banner that comes and
+	// goes.
+	if a.loading {
+		sp := th.Spinner.Render(a.spin.View())
+		right = strings.Join(nonEmpty([]string{sp, right}), "  ")
+	}
+
 	gap := a.width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
 		return left
@@ -2279,9 +2288,9 @@ type hint struct{ key, desc string }
 func (a App) footerView() string {
 	th := a.theme
 
-	// The creator credit lives at the far bottom-right; transient status/loading
+	// The creator credit lives at the far bottom-right; a transient status message
 	// shows just to its left. Dropped on very narrow terminals to keep hints
-	// usable.
+	// usable. (Load activity is shown by the header spinner, not here.)
 	credit := ""
 	if a.width >= 40 {
 		credit = th.Dim.Render(creatorHandle)
@@ -2300,12 +2309,10 @@ func (a App) footerView() string {
 		statusSeg = th.StatusErr.Render("✘ " + truncate(a.status, statusMax-2))
 	case showStatus:
 		statusSeg = th.StatusOK.Render(truncate(a.status, statusMax))
-	case a.loading:
-		statusSeg = th.Spinner.Render(a.spin.View()) + th.Dim.Render(" loading")
 	}
 
 	// A newer release nags from the footer until the user upgrades. Hidden while a
-	// transient status or the loading spinner owns the slot, and on narrow widths.
+	// transient status message owns the slot, and on narrow widths.
 	updateSeg := ""
 	if a.updateVersion != "" && statusSeg == "" && a.width >= 60 {
 		updateSeg = th.HeaderVal.Render("↑ "+a.updateVersion) + th.Dim.Render(" · ku upgrade")
