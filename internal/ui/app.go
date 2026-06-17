@@ -61,6 +61,14 @@ type target struct {
 	name string
 }
 
+// podScope narrows the pods list to the pods owned by a workload. It is set when
+// jumping from a workload to its pods and cleared on any other resource or
+// namespace change.
+type podScope struct {
+	selector string // label selector; "" means unscoped
+	desc     string // workload label for the status line, e.g. "deployments/api"
+}
+
 // App is the root Bubble Tea model.
 type App struct {
 	client *k8s.Client
@@ -85,8 +93,9 @@ type App struct {
 	gutter        int // equal padding (cells) on every side
 
 	res       k8s.ResourceInfo
-	namespace string // "" means all namespaces
-	lastNS    string // remembered specific namespace for the all-ns toggle
+	namespace string   // "" means all namespaces
+	lastNS    string   // remembered specific namespace for the all-ns toggle
+	scope     podScope // active pods-for-workload filter, if any
 
 	screen  screen
 	focus   focusKind
@@ -233,7 +242,7 @@ func (a App) loadCmd() tea.Cmd {
 	if a.screen == screenCockpit {
 		return loadCockpitCmd(a.client, a.loadSeq)
 	}
-	return loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace, "")
+	return loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace, a.scope.selector)
 }
 
 func (a App) bodyH() int {
@@ -344,7 +353,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case a.screen == screenTable && a.overlay == overlayNone && !a.loading:
 			a.loading = true
 			a.loadSeq++
-			cmds = append(cmds, loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace, ""), a.spin.Tick)
+			cmds = append(cmds, loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace, a.scope.selector), a.spin.Tick)
 		case a.screen == screenCockpit && a.overlay == overlayNone && !a.loading &&
 			time.Time(m).Sub(a.cockpitAt) >= 5*time.Second:
 			// The cockpit aggregates many lists, so refresh it less often.
@@ -535,6 +544,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case deploymentLogsMsg:
 		return a.handleDeploymentLogs(m)
+
+	case workloadSelectorMsg:
+		return a.openScopedPods(m)
 
 	case statusMsg:
 		a.setStatus(m.text, m.err)
@@ -955,6 +967,8 @@ func (a App) updateMainKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.openCordon()
 	case key.Matches(msg, a.keys.Drain):
 		return a.openDrain()
+	case key.Matches(msg, a.keys.Pods):
+		return a.openPodsForWorkload()
 	default:
 		var cmd tea.Cmd
 		a.table, cmd = a.table.Update(msg)
@@ -1217,7 +1231,7 @@ func (a App) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (a App) reload() (tea.Model, tea.Cmd) {
 	a.loading = true
 	a.loadSeq++
-	return a, tea.Batch(loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace, ""), a.spin.Tick)
+	return a, tea.Batch(loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace, a.scope.selector), a.spin.Tick)
 }
 
 func (a App) switchResource(ri k8s.ResourceInfo) (tea.Model, tea.Cmd) {
@@ -1229,6 +1243,7 @@ func (a *App) useResource(ri k8s.ResourceInfo) {
 	a.res = ri
 	a.screen = screenTable
 	a.focus = focusMain
+	a.scope = podScope{} // any explicit resource switch drops the workload scope
 	a.sidebar.syncTo(ri.Key())
 	a.table.stopFilter(true)
 	a.table.resetSort()    // columns differ per resource
@@ -1867,6 +1882,45 @@ func (a App) openDrain() (tea.Model, tea.Cmd) {
 		drainCmd(a.client, row.Name))
 }
 
+// openPodsForWorkload resolves the selected workload's pod selector, then opens
+// the pods list scoped to it. The selector lookup is a live API call, so it runs
+// as a command and the switch happens in openScopedPods once it returns.
+func (a App) openPodsForWorkload() (tea.Model, tea.Cmd) {
+	if !a.res.HasPodSelector() {
+		a.setStatus("pods: select a deployment, statefulset, daemonset, replicaset, or job", true)
+		return a, nil
+	}
+	row, ok := a.table.selected()
+	if !ok {
+		return a, nil
+	}
+	ns := row.Namespace
+	if ns == "" {
+		ns = a.namespace
+	}
+	if ns == "" {
+		a.setStatus("pods: workload namespace unavailable", true)
+		return a, nil
+	}
+	a.setStatus("loading pods for "+qualified(ns, row.Name), false)
+	return a, workloadSelectorCmd(a.client, a.res, ns, row.Name)
+}
+
+// openScopedPods switches to the pods list filtered by a workload's selector,
+// narrowing the namespace to the workload's own (a selector is only meaningful
+// within one namespace).
+func (a App) openScopedPods(m workloadSelectorMsg) (tea.Model, tea.Cmd) {
+	if m.err != nil {
+		a.setStatus("pods: "+trimErr(m.err), true)
+		return a, nil
+	}
+	a.useResource(m.podsRes) // clears any prior scope/filter/sort
+	a.namespace = m.ns
+	a.scope = podScope{selector: m.selector, desc: m.desc}
+	a.setStatus("pods for "+m.desc, false)
+	return a.reload()
+}
+
 func (a App) openTriggerJobTarget(t target) (tea.Model, tea.Cmd) {
 	if a.denyReadOnly("trigger") {
 		return a, nil
@@ -1902,6 +1956,7 @@ func (a App) openCommand() (tea.Model, tea.Cmd) {
 }
 
 func (a App) toggleAllNS() (tea.Model, tea.Cmd) {
+	a.scope = podScope{} // the workload scope is namespace-bound
 	if a.namespace == "" {
 		a.namespace = a.lastNS
 	} else {
@@ -1979,6 +2034,9 @@ func (a App) openPalette() (tea.Model, tea.Cmd) {
 		}
 		if a.res.IsDeployment() {
 			items = append(items, selItem{title: "Follow deployment logs", desc: "L", id: "act:deploylogs"})
+		}
+		if a.res.HasPodSelector() {
+			items = append(items, selItem{title: "Show pods for " + row.Name, desc: "p", id: "act:pods"})
 		}
 		if nodeOps && a.res.IsNodes() {
 			items = append(items,
@@ -2117,6 +2175,7 @@ func (a App) applySelection(res selResult) (tea.Model, tea.Cmd) {
 		a.setStatus("unknown resource", true)
 		return a, nil
 	case selNamespace:
+		a.scope = podScope{} // the workload scope is namespace-bound
 		if res.id == "*" {
 			a.namespace = ""
 		} else {
@@ -2189,6 +2248,8 @@ func (a App) applyPalette(id string) (tea.Model, tea.Cmd) {
 		return a.openRestart()
 	case "act:trigger":
 		return a.openTriggerJob()
+	case "act:pods":
+		return a.openPodsForWorkload()
 	case "cmd:jump":
 		return a.openResourceJump()
 	case "cmd:filter":
@@ -2401,6 +2462,11 @@ func (a App) headerView() string {
 	// colored indicator on the right.
 	if a.dev {
 		chips = append(chips, chip("mode", "dev"))
+	}
+	// Surface an active workload scope so the pods list reads as "owned by X",
+	// not the whole namespace.
+	if a.scope.selector != "" {
+		chips = append(chips, th.HeaderKey.Render("scope ")+th.Warn.Render(truncate(a.scope.desc, 28)))
 	}
 	// Surface an applied filter so a narrowed list never looks like the whole set.
 	if a.table.filterActive() && !a.table.filtering {
