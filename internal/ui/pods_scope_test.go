@@ -211,6 +211,55 @@ func TestSwitchingResourceClearsScope(t *testing.T) {
 	}
 }
 
+func TestPodsKeyFromConfigView(t *testing.T) {
+	app := deploymentsApp()
+	app.screen = screenConfig
+	app.configTarget = target{
+		res:  k8s.ResourceInfo{Group: "apps", Resource: "deployments", Kind: "Deployment", Namespaced: true},
+		ns:   "default",
+		name: "api",
+	}
+
+	_, cmd := app.updateConfig(mkKey("p"))
+	if cmd == nil {
+		t.Fatal("p in config view returned nil command; want a selector lookup")
+	}
+}
+
+func TestPodsKeyFromDetailView(t *testing.T) {
+	app := deploymentsApp()
+	app.screen = screenDetail
+	app.detailTarget = target{
+		res:  k8s.ResourceInfo{Group: "apps", Resource: "statefulsets", Kind: "StatefulSet", Namespaced: true},
+		ns:   "default",
+		name: "db",
+	}
+
+	_, cmd := app.updateDetail(mkKey("p"))
+	if cmd == nil {
+		t.Fatal("p in detail view returned nil command; want a selector lookup")
+	}
+}
+
+func TestPodsKeyFromConfigViewRequiresWorkload(t *testing.T) {
+	app := deploymentsApp()
+	app.screen = screenConfig
+	app.configTarget = target{
+		res:  k8s.ResourceInfo{Resource: "services", Kind: "Service", Namespaced: true},
+		ns:   "default",
+		name: "api",
+	}
+
+	model, cmd := app.updateConfig(mkKey("p"))
+	got := model.(App)
+	if cmd != nil {
+		t.Fatal("p on a non-workload config target returned a command")
+	}
+	if !got.statusErr {
+		t.Fatalf("status = %q err=%t, want error status", got.status, got.statusErr)
+	}
+}
+
 func TestToggleAllNSClearsScope(t *testing.T) {
 	app := deploymentsApp()
 	app.scope = podScope{selector: "app=api", desc: "deployments/api"}

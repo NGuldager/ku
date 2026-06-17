@@ -1000,6 +1000,8 @@ func (a App) updateConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.editTarget(a.configTarget)
 	case key.Matches(msg, a.keys.DeployLogs):
 		return a.openDeploymentLogsTarget(a.configTarget)
+	case key.Matches(msg, a.keys.Pods):
+		return a.openPodsForWorkloadTarget(a.configTarget)
 	case key.Matches(msg, a.keys.Trigger):
 		return a.openTriggerJobTarget(a.configTarget)
 	case key.Matches(msg, a.keys.Top):
@@ -1026,6 +1028,8 @@ func (a App) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.editTarget(a.detailTarget)
 	case key.Matches(msg, a.keys.DeployLogs):
 		return a.openDeploymentLogsTarget(a.detailTarget)
+	case key.Matches(msg, a.keys.Pods):
+		return a.openPodsForWorkloadTarget(a.detailTarget)
 	case key.Matches(msg, a.keys.Trigger):
 		return a.openTriggerJobTarget(a.detailTarget)
 	case key.Matches(msg, a.keys.Top):
@@ -2641,6 +2645,9 @@ func (a App) hints() []hint {
 		if a.configTarget.res.IsDeployment() {
 			h = append(h, hint{"L", "all logs"})
 		}
+		if a.configTarget.res.HasPodSelector() {
+			h = append(h, hint{"p", "pods"})
+		}
 		if !a.readOnly && a.configTarget.res.IsCronJob() {
 			h = append(h, hint{"t", "trigger"})
 		}
@@ -2652,6 +2659,9 @@ func (a App) hints() []hint {
 		h := []hint{{"↑↓", "scroll"}, {"enter", "config"}}
 		if a.detailTarget.res.IsDeployment() {
 			h = append(h, hint{"L", "all logs"})
+		}
+		if a.detailTarget.res.HasPodSelector() {
+			h = append(h, hint{"p", "pods"})
 		}
 		if !a.readOnly && a.detailTarget.res.IsCronJob() {
 			h = append(h, hint{"t", "trigger"})
@@ -2700,6 +2710,9 @@ func (a App) hints() []hint {
 		if writes {
 			h = append(h, hint{"s", "scale"})
 		}
+	}
+	if a.res.HasPodSelector() {
+		h = append(h, hint{"p", "pods"})
 	}
 	if writes && a.res.Restartable() {
 		h = append(h, hint{"R", "restart"})
