@@ -70,3 +70,26 @@ func TestResolveDoesNotFallbackForQualifiedResource(t *testing.T) {
 		t.Fatal("Resolve(pods.badgroup) fell back to core pods")
 	}
 }
+
+func TestHasPodSelector(t *testing.T) {
+	cases := []struct {
+		group, resource string
+		want            bool
+	}{
+		{"apps", "deployments", true},
+		{"apps", "statefulsets", true},
+		{"apps", "daemonsets", true},
+		{"apps", "replicasets", true},
+		{"batch", "jobs", true},
+		{"", "pods", false},
+		{"", "services", false},
+		{"", "nodes", false},
+		{"batch", "cronjobs", false},
+	}
+	for _, tc := range cases {
+		ri := ResourceInfo{Group: tc.group, Resource: tc.resource}
+		if got := ri.HasPodSelector(); got != tc.want {
+			t.Errorf("HasPodSelector(%s/%s) = %t, want %t", tc.group, tc.resource, got, tc.want)
+		}
+	}
+}

@@ -72,6 +72,18 @@ func (r ResourceInfo) Restartable() bool {
 	return false
 }
 
+// HasPodSelector reports whether the resource is a workload that owns pods via a
+// spec.selector (and can therefore be drilled into its pods).
+func (r ResourceInfo) HasPodSelector() bool {
+	switch r.Resource {
+	case "deployments", "statefulsets", "daemonsets", "replicasets":
+		return r.Group == "apps" || r.Group == ""
+	case "jobs":
+		return r.Group == "batch" || r.Group == ""
+	}
+	return false
+}
+
 // IsCronJob reports whether this is a batch CronJob list.
 func (r ResourceInfo) IsCronJob() bool {
 	return r.Group == "batch" && r.Resource == "cronjobs"

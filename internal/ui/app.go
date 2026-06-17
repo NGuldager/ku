@@ -233,7 +233,7 @@ func (a App) loadCmd() tea.Cmd {
 	if a.screen == screenCockpit {
 		return loadCockpitCmd(a.client, a.loadSeq)
 	}
-	return loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace)
+	return loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace, "")
 }
 
 func (a App) bodyH() int {
@@ -344,7 +344,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case a.screen == screenTable && a.overlay == overlayNone && !a.loading:
 			a.loading = true
 			a.loadSeq++
-			cmds = append(cmds, loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace), a.spin.Tick)
+			cmds = append(cmds, loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace, ""), a.spin.Tick)
 		case a.screen == screenCockpit && a.overlay == overlayNone && !a.loading &&
 			time.Time(m).Sub(a.cockpitAt) >= 5*time.Second:
 			// The cockpit aggregates many lists, so refresh it less often.
@@ -1217,7 +1217,7 @@ func (a App) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (a App) reload() (tea.Model, tea.Cmd) {
 	a.loading = true
 	a.loadSeq++
-	return a, tea.Batch(loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace), a.spin.Tick)
+	return a, tea.Batch(loadResourceCmd(a.client, a.loadSeq, a.res, a.namespace, ""), a.spin.Tick)
 }
 
 func (a App) switchResource(ri k8s.ResourceInfo) (tea.Model, tea.Cmd) {

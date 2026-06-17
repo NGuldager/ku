@@ -206,11 +206,11 @@ func discoverCRDsCmd(cl *k8s.Client) tea.Cmd {
 	}
 }
 
-func loadResourceCmd(cl *k8s.Client, seq int, res k8s.ResourceInfo, ns string) tea.Cmd {
+func loadResourceCmd(cl *k8s.Client, seq int, res k8s.ResourceInfo, ns, labelSelector string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := opCtx()
 		defer cancel()
-		tbl, err := cl.ListTable(ctx, res, ns)
+		tbl, err := cl.ListTable(ctx, res, ns, labelSelector)
 		if err == nil {
 			// Best-effort live usage columns; skipped if metrics are absent.
 			switch {
