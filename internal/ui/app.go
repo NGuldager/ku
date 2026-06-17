@@ -1754,7 +1754,9 @@ func (a App) adoptClient(cl *k8s.Client) (tea.Model, tea.Cmd) {
 	if a.lastNS == "" {
 		a.lastNS = "default"
 	}
-	a.screen = screenTable
+	// Land on the cluster overview after a switch, the same fresh start as a cold
+	// launch, rather than carrying the old screen into a different cluster.
+	a.screen = screenCockpit
 	a.focus = focusMain
 	a.overlay = overlayNone
 	a.table.stopFilter(true)
@@ -1764,13 +1766,13 @@ func (a App) adoptClient(cl *k8s.Client) (tea.Model, tea.Cmd) {
 	} else if ri, ok := cl.Registry().Resolve("pods"); ok {
 		a.res = ri
 	}
-	a.sidebar.syncTo(a.res.Key())
+	a.sidebar.syncTo(overviewKey)
 	// Size the freshly built sidebar/table now; otherwise it stays 0-sized and
 	// renders blank until the next window resize.
 	a.relayout()
 	a.persist()
 	a.setStatus("switched to "+shortContext(cl.ContextName), false)
-	return a.reload()
+	return a.reloadCockpit()
 }
 
 // --- selector openers -------------------------------------------------------
