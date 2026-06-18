@@ -1984,7 +1984,7 @@ func (a App) exitScope() (tea.Model, tea.Cmd) {
 	o := a.scope.origin
 	a.useResource(o.workload.res) // clears the scope and the pods table
 	a.namespace = o.listNS
-	a.pendingSelect = target{name: o.workload.name} // re-select once the list loads
+	a.pendingSelect = target{ns: o.workload.ns, name: o.workload.name} // re-select once the list loads
 	switch o.screen {
 	case screenConfig:
 		a.pendingListReload = true

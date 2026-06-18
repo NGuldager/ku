@@ -116,8 +116,8 @@ func TestExitScopeReturnsToWorkload(t *testing.T) {
 	if got.scope.selector != "" {
 		t.Fatalf("scope.selector = %q, want cleared after exit", got.scope.selector)
 	}
-	if got.pendingSelect.name != "api" {
-		t.Fatalf("pendingSelect.name = %q, want api (re-select the workload)", got.pendingSelect.name)
+	if got.pendingSelect.name != "api" || got.pendingSelect.ns != "default" {
+		t.Fatalf("pendingSelect = %+v, want default/api (re-select the workload exactly, even in all-ns)", got.pendingSelect)
 	}
 }
 
